@@ -1,0 +1,10 @@
+Name,Description,Size,Dash,Attack,Health,Damage,Range
+Chars,explosent au contact a la fin de votre tour,petit,1 case,explosion,1,2,0
+Bomber,lancent des bombes qui explosent a l'impact,gros,1 case,lance grenade,3,1,1-2
+Chaines,empeche tout deplacement au contact du joueur,petit,1 case,prison,2,0,0
+Mangeur,fonce sur son adversaire et le repousse,gros,1 case,dash-attack,4,1,1
+Cogneur,frappe violemment le sol,gros,1 case,frappe puissante,4,2,0-1
+Sorciere,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
+Pilone,lance un rayon par adversaire,gros,0 case,faiblesse,1,1,0-3
+Generateur,cree 1 petit monstre (cranes generalement) tous les tours,gros,0 case,generateur,3,0,0
+Cranes,petite creature,petit,1 case,morsure,1,1,0

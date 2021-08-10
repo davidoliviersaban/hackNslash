@@ -1,0 +1,29 @@
+bleed:
+  x: 0.25in
+  y: 0.25in
+  width: 2.25in
+  height: 3.25in
+  color: '#000000'
+
+cut:
+  x: 0.125in
+  y: 0.125in
+  width: 2.25in
+  height: 3.25in
+  radius: 0
+
+frame:
+  x: 38
+  y: 38
+  width: 750
+  height: 1050
+  radius: 25
+  color: "#000000"
+
+inside:
+  extends: frame
+  x: +=35
+  y: +=35
+  width: -= 70
+  height: -= 70
+  radius: 5

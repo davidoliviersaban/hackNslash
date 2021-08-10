@@ -1,0 +1,141 @@
+Name:
+  extends: inside
+  x: += 10
+  y: += 10
+  width: 650
+  font: ChunkFive Roman,Bold 12
+  color: '#232F23'
+  valign: top
+  align: left
+
+Image:
+  extends: inside
+  x: 100
+  height: 800
+  width: :scale
+
+Description:
+  extends: Name
+  y: += 200
+  font: ChunkFive Roman,Plain 8
+  height: 300
+  fill_color: '#FFFFFF'
+
+Rank:
+  extends: Name
+  x: += 550
+  width: 100
+  height: 100
+
+Text:
+  extends: Name
+  x: += 120
+  y: += 300
+
+Icons1:
+  extends: Text
+  x: -= 120
+  width: 100
+  height: 100
+
+Icons2:
+  extends: Icons1
+  x: += 400
+
+
+Targets:
+  extends: Text
+  y: += 25
+
+TargetsIcon:
+  extends: Icons1
+  icon: human-target
+
+Health:
+  extends: Text
+  y: += 25
+
+HealthIcon:
+  extends: Icons1
+  icon: human-target
+
+Damage:
+  extends: Targets
+  y: += 120
+DamageIcon:
+  extends: TargetsIcon
+  y: += 120
+  icon: thunder-blade
+
+Range:
+  extends: Damage
+  y: += 120
+RangeIcon:
+  extends: DamageIcon
+  y: += 120
+  icon: high-shot
+
+Attack:
+  extends: Range
+  y: += 120
+  font: ChunkFive Roman,Plain 8
+AttackIcon:
+  extends: RangeIcon
+  y: += 120
+  icon: high-shot
+
+Combo:
+  extends: Range
+  y: 900
+  font: ChunkFive Roman,Plain 8
+
+ComboIcon:
+  extends: Icons1
+  y: 900
+  icon: extra-time
+
+Dash:
+  extends: Targets
+  x: += 400
+DashIcon:
+  extends: Icons2
+  icon: wingfoot
+
+PushDistance:
+  extends: Dash
+  y: += 120
+PushDistanceIcon:
+  extends: DashIcon
+  y: += 120
+  icon: push
+
+PullDistance:
+  extends: PushDistance
+  y: += 120
+PullDistanceIcon:
+  extends: PushDistanceIcon
+  y: += 120
+  icon: pull
+
+
+DrawCards:
+  extends: PullDistance
+  y: += 120
+DrawCardsIcon:
+  extends: PullDistanceIcon
+  y: += 120
+  icon: card-draw
+
+Size:
+  extends: PullDistance
+  y: += 120
+SizeIcon:
+  extends: PullDistanceIcon
+  y: += 120
+  icon: card-draw
+
+Date:
+  extends: Name
+  y: 1055
+  color: '#000000'
+  font: ChunkFive Roman,Plain 5
