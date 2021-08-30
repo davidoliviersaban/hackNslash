@@ -3,6 +3,7 @@ require 'game_icons'
 
 bonus = Squib.csv file: 'src/resources/bonus.csv'
 bestiary = Squib.csv file: 'src/resources/bestiary.csv'
+bosses = Squib.csv file: 'src/resources/bosses.csv'
 date = DateTime.now.to_s
 #print GameIcons.names
 
@@ -43,8 +44,6 @@ Squib::Deck.new(cards: bonus["Name"].size,
 
 end
 
-
-
 #print GameIcons.names
 
 Squib::Deck.new(cards: bestiary["Name"].size,
@@ -54,8 +53,9 @@ Squib::Deck.new(cards: bestiary["Name"].size,
   rect layout: :frame
   rect layout: :bleed
 
+  text layout: "Name", str: deck["Name"].zip(deck["Level"]).map{ |name,level| name+" "+level.to_s}
 
-  %w(Name Description Size Dash Attack Health Damage Range).each do |key|
+  %w(Description Size Dash Attack Health Damage Range).each do |key|
     text str: deck[key], layout: key
   end
 
@@ -69,6 +69,36 @@ Squib::Deck.new(cards: bestiary["Name"].size,
   svg layout: "SizeIcon", file: GameIcons.get('growth').file
 
   text str: date, layout: :Date
-  save_png prefix: deck["Name"].map{ |name| "bestiary."+name }
+  save_png prefix: deck["Name"].zip(deck["Level"]).map{ |name,level| "bestiary."+level.to_s+"."+name }
+
+end
+
+
+#print GameIcons.names
+
+Squib::Deck.new(cards: bosses["Name"].size,
+                layout: %w(src/resources/Vlayout.yml src/resources/Vcards.yml)) do
+
+  deck = bosses
+  background color: 'darkred'
+  rect layout: :frame
+  rect layout: :bleed
+  text layout: "Name", color: 'white', str: deck["Name"].zip(deck["Level"]).map{ |name,level| name+" "+level.to_s}
+
+  %w(Description Size Dash Attack Health Damage Range).each do |key|
+    text str: deck[key], layout: key, color: 'white'
+  end
+
+  svg layout: "AttackIcon", file: GameIcons.get('evil-hand').file
+  svg layout: "DamageIcon", file: GameIcons.get('thunder-blade').file
+  svg layout: "DashIcon", file: GameIcons.get('wingfoot').file
+  svg layout: "RangeIcon", file: GameIcons.get('high-shot').file
+  svg layout: "PushDistanceIcon", file: GameIcons.get('push').file
+  svg layout: "PullDistanceIcon", file: GameIcons.get('pull').file
+  svg layout: "HealthIcon", file: GameIcons.get('life-bar').file
+  svg layout: "SizeIcon", file: GameIcons.get('growth').file
+
+  text str: date, layout: :Date
+  save_png prefix: deck["Name"].zip(deck["Level"]).map{ |name,level| "bosses."+level.to_s+"."+name }
 
 end

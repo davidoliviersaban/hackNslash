@@ -1,10 +1,19 @@
-Name,Description,Size,Dash,Attack,Health,Damage,Range
-Chars,explosent au contact a la fin de votre tour,petit,1 case,explosion,1,2,0
-Bomber,lancent des bombes qui explosent a l'impact,gros,1 case,lance grenade,3,1,1-2
-Chaines,empeche tout deplacement au contact du joueur,petit,1 case,prison,2,0,0
-Mangeur,fonce sur son adversaire et le repousse,gros,1 case,dash-attack,4,1,1
-Cogneur,frappe violemment le sol,gros,1 case,frappe puissante,4,2,0-1
-Sorciere,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
-Pilone,lance un rayon par adversaire,gros,0 case,faiblesse,1,1,0-3
-Generateur,cree 1 petit monstre (cranes generalement) tous les tours,gros,0 case,generateur,3,0,0
-Cranes,petite creature,petit,1 case,morsure,1,1,0
+Level, Name,Description,Size,Dash,Attack,Health,Damage,Range
+1, Bombe,explosent au contact a la fin de votre tour,petit,1,explosion,1,2,0
+1, Artificier,lancent des bombes qui explosent a l'impact,gros,1,lance grenade,3,1,1-2
+1, Chaines,empeche tout deplacement au contact du joueur,petit,1,prison,2,0,0
+1, Repousseur,fonce sur son adversaire et le repousse,gros,1,repousse,4,1,1
+1, Cogneur,frappe violemment le sol,gros,1,frappe puissante,4,2,0-1
+1, Sorciere,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
+1, Pilone,lance un rayon par adversaire,gros,0,faiblesse,1,1,0-3
+1, Generateur,cree 1 petit monstre (minion generalement) tous les tours,gros,0,generateur,3,0,0
+1, Minion,petite creature,petit,1,morsure,1,1,0
+2, Bombe,explosent au contact a la fin de votre tour,petit,1,explosion,2,2,0
+2, Artificier,lancent des bombes qui explosent a l'impact,gros,1,lance grenade,3,2,1-2
+2, Chaines,empeche tout deplacement au contact du joueur,petit,1,prison,3,1,0
+2, Repousseur,fonce sur son adversaire et le repousse,gros,1,repousse,5,1,0-1
+2, Cogneur,frappe violemment le sol,gros,1,frappe puissante,6,2,0-1
+2, Sorciere,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
+2, Pilone,lance un rayon par adversaire,gros,0,faiblesse,2,1,0-3
+2, Generateur,cree 1 petit monstre (minion generalement) tous les tours,gros,0,generateur,6,0,0
+2, Minion,petite creature,petit,2,morsure,1,1,0
