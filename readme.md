@@ -21,3 +21,5 @@ vocabulaire:
 | Player | Date | Initial deck | Final deck | Damages taken |
 |---|---|---|---|---|
 | DOS | 2021/08/10 | 6 Attack, Rapid Fire, Vortex | 2 Attack, 3 Rapid Fire, Vortex II, 3 Fireball | 3 |
+| Jonas | 2021/08/10 | 6 Attack, Dash, Jump | Vortex I, 2 Spin Attack, Heal I, Jump I, Fireball I, 5 Attack | 14 |
+| Ambroise | 2021/08/10 | 6 Attack, Spin Attack, Fireball | |||
