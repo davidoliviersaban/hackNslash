@@ -1,0 +1,28 @@
+bleed:
+    x: 1in
+    y: .866in #sqrt(3)*radius/2
+    n: 6
+    radius: 1in
+#    stroke_color: '#000000'
+#    dash: '0.02in 0.02in'
+
+cut:
+    extends: bleed
+#    radius: 33mm
+    stroke_color: red
+    dash: ''
+
+#Used for lasercut pointer
+corner1:
+    # x1: 1.7mm
+    # y1: 1.7mm
+    # x2: 11.7mm
+    # y2: 1.7mm
+    # stroke_color: '#000000'
+corner2:
+    extends: corner1
+    # x2: 1.7mm
+    # y2: 11.7mm
+
+frame:
+    extends: cut
