@@ -3,8 +3,9 @@ require 'squib'
 #deck = Squib.csv file: 'src/resources/land_cards.csv'
 deck = ["floor1.png", "floor2.png", "floor3.png"]
 floor_size = "101mm"
+date = DateTime.now.to_s
 
-def drawHexagonalGrid(deck, dirname, floor_size)  
+def drawHexagonalGrid(deck, dirname, floor_size, date)  
   ix = inches(1)
   iy = inches(0.866)
   stroke_width= 10
@@ -21,10 +22,12 @@ def drawHexagonalGrid(deck, dirname, floor_size)
       polygon x: (3*i+1.5)*radius-radius/2, y:j*iy+iy/2, n: 6, radius: radius, stroke_color: :red, stroke_width: stroke_width
     end
   end
-  save_png prefix: deck.map{|str| "hex."+str}, dir: dirname
+
+  text str: date, x: 10, y: 10
+  save_png prefix: deck.map{|str| "hex."+str}, dir: dirname, font_size: 6
 end
 
-def drawSquareGrid(deck, dirname, floor_size)  
+def drawSquareGrid(deck, dirname, floor_size, date)  
   ix = inches(1)
   iy = inches(1)
   radius = inches(0.5)
@@ -40,14 +43,16 @@ def drawSquareGrid(deck, dirname, floor_size)
       polygon x: i*ix+ix/2, y:j*iy+iy/2, n: 4, radius: radius, stroke_color: :red, stroke_width: stroke_width
     end
   end
-  save_png prefix: deck.map{|str| "square."+str}, dir: dirname
+
+  text str: date, x: 10, y: 10
+  save_png prefix: deck.map{|str| "square."+str}, dir: dirname, font_size: 6
 end
 
 Squib::Deck.new(cards: deck.size,
 #                layout: 'src/resources/tiles-layout.yml',
                 width: floor_size, height: floor_size) do # height = width*sqrt(3)/2
 
-    drawHexagonalGrid(deck, '_tiles', floor_size)
+    drawHexagonalGrid(deck, '_tiles', floor_size, date)
 end
 
 
@@ -55,5 +60,5 @@ Squib::Deck.new(cards: deck.size,
 #                layout: 'src/resources/tiles-layout.yml',
                 width: floor_size, height: floor_size) do # height = width*sqrt(3)/2
 
-    drawSquareGrid(deck, '_tiles', floor_size)
+    drawSquareGrid(deck, '_tiles', floor_size, date)
 end
