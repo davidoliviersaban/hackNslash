@@ -1,8 +1,8 @@
 id,name,count1,monster1,count2,monster2,count3,monster3,count4,monster4,count5,monster5,count6,monster6,count7,monster7,gift
-1,salle boom,2,char,2,char,,bouclier,2,char,1,bomber,1,bomber,,epines,attack
-2,salle des tortures,2,chaines,1,mangeur,1,cogneur,,bouclier,1,cogneur,1,mangeur,2,chaines,attack
-3,salle des explosions,1,bomber,,bouclier,1,bomber,,epines,1,bomber,1,char,2,char,extra life
-4,salle des cranes,2,crane,1,generateur,2,crane,1,generateur,,bouclier,2,chaines,,epines,extra life
-5,salle a manger,1,mangeur,1,mangeur,2,crane,2,chaines,,bouclier,1,mangeur,1,sorciere,attack
-6,salle 2 cranes,1,generateur,2,crane,1,generateur,,bouclier,1,sorciere,1,sorciere,1,mangeur,attack
-7,salle a distance,1,pilone,1,pilone,1,pilone,1,sorciere,,bouclier,1,sorciere,2,chaines,extra life
+1,salle boom,2,Fungus,2,Fungus,,Bouclier,2,Fungus,1,Goblin bomber,1,Goblin bomber,,Epines,Attaque ou PV +
+2,salle des tortures,2,Slime,1,Boar,1,Orc,,Bouclier,1,Orc,1,Boar,2,Slime,Attaque ou PV +
+3,salle des explosions,1,Goblin bomber,,Bouclier,1,Goblin bomber,,Epines,1,Goblin bomber,1,Fungus,2,Fungus,Attaque ou PV +
+4,salle des Goblins,2,Goblins,1,Wolf rider,2,Goblins,1,Wolf rider,,Epines,2,Slime,1,Wolf rider,Attaque ou PV +
+5,salle a manger,1,Boar,1,Boar,2,Goblins,2,Slime,,Bouclier,1,Boar,1,Red cap,Attaque ou PV +
+6,salle Goblin squad,1,Wolf rider,2,Goblins,,Bouclier,1,Red cap,1,Orc,1,Red cap,1,Boar,Attaque ou PV +
+7,salle a distance,1,Evil eye,1,Evil eye,1,Evil eye,1,Red cap,,Bouclier,1,Red cap,2,Slime,Attaque ou PV +

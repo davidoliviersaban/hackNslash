@@ -1,7 +1,7 @@
 Level, Name,Description,Size,Dash,Attack,Health,Damage,Range
-1, Slasher_1|3,Dash puis Attack,gros,0-2,dash-attack,8,2,0
-1, Slasher_2|3,Spawn 2 minions puis Dash puis Attack,gros,0-2,spawn-dash-attack,8,2,0
-1, Slasher_3|3,Bouclier puis spawn 2 minions puis Dash puis Attack,gros,0-2,shield-spawn-dash-attack,8,2,0
-2, Striker_1|3,Spin Attack,gros,1,spin,10,2,0-1
-2, Striker_2|3,Repousse puis Spin Attack,gros,1 puis 1,repousse-spin,10,2,0-1
-2, Striker_3|3,Bouclier puis Repousse puis Spin Attack,gros,1 puis 1,shield-repousse-spin,10,2,0-1
+1, Slasher_1|3,Impulsion puis Attaque,gros,0-2,dash-attack,8,2,0
+2, Slasher_2|3,Genere 2 minions puis Impulsion puis Attaque,gros,0-2,spawn-dash-attack,8,2,0
+3, Slasher_3|3,Bouclier puis spawn 2 minions puis Impulsion puis Attaque,gros,0-2,shield-spawn-dash-attack,8,2,0
+1, Striker_1|3,Tourbillon,gros,1,spin,10,2,0-1
+2, Striker_2|3,Repousse puis Tourbillon,gros,1 puis 1,repousse-spin,10,2,0-1
+3, Striker_3|3,Bouclier puis Repousse puis Tourbillon,gros,1 puis 1,shield-repousse-spin,10,2,0-1

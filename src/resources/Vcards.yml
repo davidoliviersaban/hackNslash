@@ -88,6 +88,7 @@ Combo:
   extends: Range
   y: 900
   font: ChunkFive Roman,Plain 8
+  width: 550
 
 ComboIcon:
   extends: Icons1
@@ -133,6 +134,16 @@ SizeIcon:
   extends: PullDistanceIcon
   y: += 120
   icon: card-draw
+
+Gift:
+  extends: Name
+  y: 950
+  x: += 80
+GiftIcon:
+  extends: Icons1
+  y: 925
+  x: 50
+  icon: present
 
 Date:
   extends: Name
