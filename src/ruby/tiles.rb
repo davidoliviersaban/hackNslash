@@ -22,7 +22,7 @@ def drawHexagonalGrid(deck, dirname, floor_size, date)
   radius = dimensions[2]
   stroke_width= 10
 
-  png file: deck.map{|str| 'src/resources/images/'+str}, width: floor_size, height: floor_size
+  png file: deck.map{|str| 'src/resources/images/cards/boards/'+str}, width: floor_size, height: floor_size
 
   line x1: 0, y1: 0, x2: 40, y2:0, stroke_color: :red
   line x1: 0, y1: 0, x2: 0, y2:40, stroke_color: :red
@@ -45,7 +45,7 @@ def drawSquareGrid(deck, dirname, floor_size, date)
   radius = dimensions[2]
   stroke_width= 10
 
-  png file: deck.map{|str| 'src/resources/images/'+str}, width: floor_size, height: floor_size
+  png file: deck.map{|str| 'src/resources/images/cards/boards/'+str}, width: floor_size, height: floor_size
 
   line x1: 0, y1: 0, x2: 40, y2:0, stroke_color: :red
   line x1: 0, y1: 0, x2: 0, y2:40, stroke_color: :red
