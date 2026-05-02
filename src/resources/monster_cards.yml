@@ -1,0 +1,250 @@
+MonsterPortrait:
+  extends: monster_inside
+  x: += 6
+  y: += 6
+  width: 250
+  height: 450
+
+MonsterName:
+  extends: monster_inside
+  x: 285
+  y: 26
+  width: 250
+  height: 64
+  font: ChunkFive Roman,Bold 11
+  color: '#111111'
+  valign: top
+  align: left
+
+MonsterSize:
+  extends: monster_inside
+  x: 575
+  y: 28
+  width: 90
+  height: 40
+  font: ChunkFive Roman,Plain 7
+  color: '#111111'
+  valign: top
+  align: center
+
+MonsterHpValue:
+  extends: monster_inside
+  x: 585
+  y: 84
+  width: 70
+  height: 54
+  font: ChunkFive Roman,Bold 16
+  color: '#7a0f0f'
+  valign: middle
+  align: center
+
+MonsterHpLabel:
+  extends: monster_inside
+  x: 652
+  y: 92
+  width: 28
+  height: 24
+  font: ChunkFive Roman,Plain 5
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterAiTitle:
+  extends: monster_inside
+  x: 285
+  y: 92
+  width: 190
+  height: 24
+  font: ChunkFive Roman,Bold 7
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterAiText:
+  extends: monster_inside
+  x: 285
+  y: 120
+  width: 270
+  height: 80
+  font: ChunkFive Roman,Plain 6
+  color: '#111111'
+  valign: top
+  align: left
+
+MonsterAiIcon1:
+  extends: monster_inside
+  x: 285
+  y: 120
+  width: 34
+  height: 34
+
+MonsterAiLabel1:
+  extends: monster_inside
+  x: 281
+  y: 156
+  width: 44
+  height: 18
+  font: ChunkFive Roman,Plain 4
+  color: '#111111'
+  valign: middle
+  align: center
+
+MonsterAiArrow1:
+  extends: monster_inside
+  x: 324
+  y: 126
+  width: 18
+  height: 18
+  font: ChunkFive Roman,Bold 6
+  color: '#111111'
+  valign: middle
+  align: center
+
+MonsterAiIcon2:
+  extends: MonsterAiIcon1
+  x: 345
+
+MonsterAiLabel2:
+  extends: MonsterAiLabel1
+  x: 337
+  width: 50
+
+MonsterAiArrow2:
+  extends: MonsterAiArrow1
+  x: 386
+
+MonsterAiIcon3:
+  extends: MonsterAiIcon1
+  x: 408
+
+MonsterAiLabel3:
+  extends: MonsterAiLabel1
+  x: 398
+  width: 72
+
+MonsterKeywordTitle:
+  extends: monster_inside
+  x: 285
+  y: 212
+  width: 250
+  height: 24
+  font: ChunkFive Roman,Bold 7
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterKeywordText:
+  extends: monster_inside
+  x: 285
+  y: 238
+  width: 380
+  height: 54
+  font: ChunkFive Roman,Plain 6
+  color: '#111111'
+  valign: top
+  align: left
+
+MonsterKeywordIcon1:
+  extends: monster_inside
+  x: 285
+  y: 238
+  width: 28
+  height: 28
+
+MonsterKeywordLabel1:
+  extends: monster_inside
+  x: 317
+  y: 241
+  width: 90
+  height: 20
+  font: ChunkFive Roman,Plain 5
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterKeywordIcon2:
+  extends: MonsterKeywordIcon1
+  x: 420
+
+MonsterKeywordLabel2:
+  extends: MonsterKeywordLabel1
+  x: 452
+  width: 90
+
+MonsterKeywordIcon3:
+  extends: MonsterKeywordIcon1
+  x: 555
+
+MonsterKeywordLabel3:
+  extends: MonsterKeywordLabel1
+  x: 587
+  width: 72
+
+MonsterSpecialTitle:
+  extends: monster_inside
+  x: 285
+  y: 308
+  width: 250
+  height: 24
+  font: ChunkFive Roman,Bold 7
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterSpecialText:
+  extends: monster_inside
+  x: 285
+  y: 336
+  width: 320
+  height: 90
+  font: ChunkFive Roman,Plain 6
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterSpecialIcon:
+  extends: monster_inside
+  x: 285
+  y: 338
+  width: 34
+  height: 34
+
+MonsterSpecialLabel:
+  extends: monster_inside
+  x: 327
+  y: 338
+  width: 220
+  height: 26
+  font: ChunkFive Roman,Plain 6
+  color: '#111111'
+  valign: middle
+  align: left
+
+MonsterActivationIcon:
+  extends: monster_inside
+  x: 626
+  y: 376
+  width: 26
+  height: 26
+
+MonsterActivationText:
+  extends: monster_inside
+  x: 620
+  y: 350
+  width: 45
+  height: 60
+  font: ChunkFive Roman,Plain 5
+  color: '#111111'
+  valign: middle
+  align: center
+
+MonsterDate:
+  extends: monster_inside
+  x: 565
+  y: 440
+  width: 100
+  height: 14
+  font: ChunkFive Roman,Plain 3
+  color: '#666666'
+  valign: middle
+  align: right

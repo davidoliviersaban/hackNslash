@@ -45,21 +45,26 @@ final class HNS_PowerResolver
         self::assertEntityExists($state, $sourceEntityId);
         self::assertEntityExists($state, $targetEntityId);
 
+        $sourceType = (string) ($state['entities'][$sourceEntityId]['type'] ?? '');
+        $targetType = (string) ($state['entities'][$targetEntityId]['type'] ?? '');
+        if ($sourceType === 'hero' && $targetType === 'hero') {
+            throw new InvalidArgumentException("Cannot target an allied hero with $powerKey.");
+        }
+
         $sourceTile = self::entityTile($state, $sourceEntityId);
         $targetTile = self::entityTile($state, $targetEntityId);
-        if (!HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['range'])) {
+        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+            ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
+            : HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['range']);
+        if (!$isInRange) {
             throw new InvalidArgumentException("Target is out of range for $powerKey.");
         }
 
-        $newHealth = max(0, (int) $state['entities'][$targetEntityId]['health'] - (int) $power['damage']);
-        $state['entities'][$targetEntityId]['health'] = $newHealth;
-        if ($newHealth === 0) {
-            $state['entities'][$targetEntityId]['state'] = 'dead';
-            $events[] = [
-                'type' => HNS_FreeActionEngine::EVENT_AFTER_KILL,
-                'source_entity_id' => $sourceEntityId,
-                'target_entity_id' => $targetEntityId,
-            ];
+        $state = self::damageEntity($targetEntityId, (int) $power['damage'], $sourceEntityId, $state, $events);
+
+        if (in_array('thorns', $state['level_monster_abilities'] ?? [], true) && HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
+            $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
+            $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
         }
 
         return ['state' => $state, 'events' => $events];
@@ -80,20 +85,33 @@ final class HNS_PowerResolver
 
         $sourceTile = self::entityTile($state, $sourceEntityId);
         $targetTile = $state['tiles'][$targetTileId];
-        if (!HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['distance'])) {
+        $rangeMetric = $power['range_metric'] ?? 'manhattan';
+        $isInRange = $rangeMetric === 'orthogonal'
+            ? HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['distance'])
+            : HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['distance']);
+        if ($rangeMetric === 'chebyshev') {
+            $isInRange = HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['distance']);
+        }
+        if (!$isInRange) {
             throw new InvalidArgumentException('Dash target is out of range.');
         }
 
-        if (!HNS_BoardRules::isTileWalkable($targetTile) || !HNS_BoardRules::isTileAvailable($targetTileId, $state['entities'], $sourceEntityId)) {
+        if (!HNS_BoardRules::isTileWalkable($targetTile)) {
             throw new InvalidArgumentException('Dash target is not available.');
         }
 
-        $state['entities'][$sourceEntityId]['tile_id'] = $targetTileId;
-        $events[] = [
-            'type' => HNS_FreeActionEngine::EVENT_AFTER_DASH,
-            'source_entity_id' => $sourceEntityId,
-            'target_tile_id' => $targetTileId,
-        ];
+        if (!HNS_BoardRules::canEnterTile($targetTileId, $state['entities'], $state['entities'][$sourceEntityId], $sourceEntityId)) {
+            $state = self::resolveBlockedMovement($sourceEntityId, $targetTileId, $sourceEntityId, $state, $events);
+        }
+
+        if (HNS_BoardRules::canEnterTile($targetTileId, $state['entities'], $state['entities'][$sourceEntityId], $sourceEntityId)) {
+            $state['entities'][$sourceEntityId]['tile_id'] = $targetTileId;
+            $events[] = [
+                'type' => HNS_FreeActionEngine::EVENT_AFTER_DASH,
+                'source_entity_id' => $sourceEntityId,
+                'target_tile_id' => $targetTileId,
+            ];
+        }
 
         return ['state' => $state, 'events' => $events];
     }
@@ -118,13 +136,23 @@ final class HNS_PowerResolver
 
         $sourceTile = self::entityTile($state, $sourceEntityId);
         $selectedTile = $state['tiles'][$selectedTileId];
-        if (!HNS_BoardRules::isInRange($sourceTile, $selectedTile, $power['range'])) {
+        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+            ? HNS_BoardRules::isInDiagonalRange($sourceTile, $selectedTile, $power['range'])
+            : HNS_BoardRules::isInRange($sourceTile, $selectedTile, $power['range']);
+        if (!$isInRange) {
             throw new InvalidArgumentException('Selected tile is out of range for pull power.');
         }
 
+        $targetEntityIds = self::sortMonstersByMovementOrder($targetEntityIds, $state['entities']);
+
         foreach ($targetEntityIds as $targetEntityId) {
             self::assertEntityExists($state, $targetEntityId);
-            $state = self::pullEntityTowardTile($targetEntityId, $selectedTileId, (int) $power['pull_distance'], $state);
+            $targetTile = self::entityTile($state, $targetEntityId);
+            if (!HNS_BoardRules::isInDiagonalRange($selectedTile, $targetTile, $power['target_range_from_selected_tile'])) {
+                throw new InvalidArgumentException('Pull target is out of range from selected tile.');
+            }
+
+            $state = self::pullEntityTowardTile($targetEntityId, $selectedTileId, (int) $power['pull_distance'], $state, $events, $sourceEntityId);
         }
 
         $events[] = [
@@ -140,7 +168,7 @@ final class HNS_PowerResolver
      * @param array<string, mixed> $state
      * @return array<string, mixed>
      */
-    private static function pullEntityTowardTile(int $entityId, int $destinationTileId, int $distance, array $state): array
+    private static function pullEntityTowardTile(int $entityId, int $destinationTileId, int $distance, array $state, array &$events, int $sourceEntityId): array
     {
         for ($step = 0; $step < $distance; $step++) {
             $currentTile = self::entityTile($state, $entityId);
@@ -154,7 +182,14 @@ final class HNS_PowerResolver
                 return $state;
             }
 
-            $state['entities'][$entityId]['tile_id'] = (int) $nextTile['id'];
+            $nextTileId = (int) $nextTile['id'];
+            if (!HNS_BoardRules::isTileWalkable($nextTile) || !HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
+                $state = self::resolveBlockedMovement($entityId, $nextTileId, $sourceEntityId, $state, $events);
+            }
+
+            if (HNS_BoardRules::isTileWalkable($nextTile) && HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
+                $state['entities'][$entityId]['tile_id'] = $nextTileId;
+            }
         }
 
         return $state;
@@ -169,20 +204,21 @@ final class HNS_PowerResolver
      */
     private static function bestAdjacentTileToward(array $from, array $to, array $tiles, array $entities, int $movingEntityId): ?array
     {
-        $currentDistance = HNS_BoardRules::distance($from, $to);
+        $currentDistance = HNS_BoardRules::diagonalDistance($from, $to);
         $bestTile = null;
         $bestDistance = $currentDistance;
 
         foreach ($tiles as $tile) {
-            if (HNS_BoardRules::distance($from, $tile) !== 1) {
+            if (HNS_BoardRules::diagonalDistance($from, $tile) !== 1) {
                 continue;
             }
 
-            if (!HNS_BoardRules::isTileWalkable($tile) || !HNS_BoardRules::isTileAvailable((int) $tile['id'], $entities, $movingEntityId)) {
+            $tileId = (int) $tile['id'];
+            if (!HNS_BoardRules::isTileWalkable($tile) && $tileId !== (int) $to['id']) {
                 continue;
             }
 
-            $distance = HNS_BoardRules::distance($tile, $to);
+            $distance = HNS_BoardRules::diagonalDistance($tile, $to);
             if ($distance < $bestDistance) {
                 $bestDistance = $distance;
                 $bestTile = $tile;
@@ -190,6 +226,145 @@ final class HNS_PowerResolver
         }
 
         return $bestTile;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $obstacle
+     * @param array<int, array<string, mixed>> $tiles
+     * @return array<string, mixed>|null
+     */
+    private static function closestTileBeforeObstacle(array $from, array $obstacle, array $tiles): ?array
+    {
+        $dx = (int) $obstacle['x'] <=> (int) $from['x'];
+        $dy = (int) $obstacle['y'] <=> (int) $from['y'];
+        $stopX = (int) $obstacle['x'] - $dx;
+        $stopY = (int) $obstacle['y'] - $dy;
+
+        foreach ($tiles as $tile) {
+            if ((int) $tile['x'] === $stopX && (int) $tile['y'] === $stopY && HNS_BoardRules::isTileWalkable($tile)) {
+                return $tile;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function resolveBlockedMovement(int $movingEntityId, int $targetTileId, int $damageSourceEntityId, array $state, array &$events): array
+    {
+        $blockingMonsterId = self::weakestMonsterOnTile($targetTileId, $state['entities'], $movingEntityId);
+        if ($blockingMonsterId !== null) {
+            $state = self::damageEntity($movingEntityId, 1, $damageSourceEntityId, $state, $events);
+            return self::damageEntity($blockingMonsterId, 1, $damageSourceEntityId, $state, $events);
+        }
+
+        return self::damageEntity($movingEntityId, 1, $damageSourceEntityId, $state, $events);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $entities
+     */
+    private static function weakestMonsterOnTile(int $tileId, array $entities, int $movingEntityId): ?int
+    {
+        $weakestMonsterId = null;
+        $weakestHealth = PHP_INT_MAX;
+
+        foreach ($entities as $entityId => $entity) {
+            if ((int) $entityId === $movingEntityId || ($entity['state'] ?? 'active') !== 'active') {
+                continue;
+            }
+
+            if (($entity['type'] ?? null) !== 'monster' || (int) ($entity['tile_id'] ?? 0) !== $tileId) {
+                continue;
+            }
+
+            $health = (int) ($entity['health'] ?? 0);
+            if ($health < $weakestHealth || ($health === $weakestHealth && (int) $entityId < (int) $weakestMonsterId)) {
+                $weakestHealth = $health;
+                $weakestMonsterId = (int) $entityId;
+            }
+        }
+
+        return $weakestMonsterId;
+    }
+
+    /**
+     * @param array<int, int> $entityIds
+     * @param array<int, array<string, mixed>> $entities
+     * @return array<int, int>
+     */
+    private static function sortMonstersByMovementOrder(array $entityIds, array $entities): array
+    {
+        usort($entityIds, static function (int $leftId, int $rightId) use ($entities): int {
+            $leftOrder = self::monsterMovementOrder($entities[$leftId] ?? []);
+            $rightOrder = self::monsterMovementOrder($entities[$rightId] ?? []);
+
+            return $leftOrder <=> $rightOrder ?: $leftId <=> $rightId;
+        });
+
+        return $entityIds;
+    }
+
+    /** @param array<string, mixed> $entity */
+    private static function monsterMovementOrder(array $entity): int
+    {
+        if (($entity['type'] ?? null) === 'boss' || ($entity['monster_size'] ?? null) === 'boss') {
+            return 3;
+        }
+
+        if (($entity['monster_size'] ?? 'small') === 'big') {
+            return 2;
+        }
+
+        return 1;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function damageEntity(int $targetEntityId, int $damage, int $sourceEntityId, array $state, array &$events): array
+    {
+        if (($state['entities'][$targetEntityId]['type'] ?? null) === 'monster'
+            && in_array('shield', $state['level_monster_abilities'] ?? [], true)
+            && ($state['entities'][$targetEntityId]['shield_broken'] ?? false) !== true
+            && $damage > 0
+        ) {
+            $state['entities'][$targetEntityId]['shield_broken'] = true;
+            $events[] = ['type' => 'shieldBroken', 'source_entity_id' => $targetEntityId, 'damage_absorbed' => $damage];
+
+            return $state;
+        }
+
+        $newHealth = max(0, (int) $state['entities'][$targetEntityId]['health'] - $damage);
+        $state['entities'][$targetEntityId]['health'] = $newHealth;
+
+        if ($newHealth === 0 && ($state['entities'][$targetEntityId]['state'] ?? 'active') !== 'dead') {
+            $state['entities'][$targetEntityId]['state'] = 'dead';
+            if (($state['entities'][$targetEntityId]['type'] ?? null) === 'monster') {
+                $events[] = [
+                    'type' => HNS_FreeActionEngine::EVENT_AFTER_KILL,
+                    'source_entity_id' => $sourceEntityId,
+                    'target_entity_id' => $targetEntityId,
+                ];
+
+                if (($state['entities'][$targetEntityId]['on_death'] ?? null) === 'explode') {
+                    $state = HNS_MonsterAi::explode($targetEntityId, $state, $state['entities'][$targetEntityId], $events);
+                }
+            }
+
+            if (($state['entities'][$targetEntityId]['type'] ?? null) === 'boss') {
+                $state = HNS_BossEngine::resolveBossDefeat($targetEntityId, $state, $state['bosses'] ?? [], $events);
+            }
+        }
+
+        return $state;
     }
 
     /**

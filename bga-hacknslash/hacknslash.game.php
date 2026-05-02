@@ -8,6 +8,13 @@ require_once(APP_GAMEMODULE_PATH . 'module/table/table.game.php');
 require_once(__DIR__ . '/modules/HNS_Setup.php');
 require_once(__DIR__ . '/modules/HNS_Player.php');
 require_once(__DIR__ . '/modules/HNS_Board.php');
+require_once(__DIR__ . '/modules/HNS_LevelGenerator.php');
+require_once(__DIR__ . '/modules/HNS_RoomSlotPattern.php');
+require_once(__DIR__ . '/modules/HNS_MonsterAi.php');
+require_once(__DIR__ . '/modules/HNS_LevelReward.php');
+require_once(__DIR__ . '/modules/HNS_BossEngine.php');
+require_once(__DIR__ . '/modules/HNS_GameEngine.php');
+require_once(__DIR__ . '/modules/HNS_RoundEngine.php');
 
 class Hacknslash extends Table
 {
@@ -28,6 +35,7 @@ class Hacknslash extends Table
             'current_level' => 10,
             'selected_tile' => 11,
             'pending_action' => 12,
+            'round_number' => 13,
         ]);
     }
 
@@ -48,6 +56,7 @@ class Hacknslash extends Table
         $this->setGameStateInitialValue('current_level', HNS_FIRST_LEVEL);
         $this->setGameStateInitialValue('selected_tile', 0);
         $this->setGameStateInitialValue('pending_action', 0);
+        $this->setGameStateInitialValue('round_number', 1);
 
         $this->setupStaticCards();
         $this->setupInitialBoard(HNS_FIRST_LEVEL);
@@ -70,6 +79,8 @@ class Hacknslash extends Table
             'tile_types' => $this->tile_types,
             'monsters' => $this->monsters,
             'bonus_cards' => $this->bonus_cards,
+            'player_powers' => $this->getPlayerPowers(),
+            'level_monster_abilities' => $this->getLevelMonsterAbilities(),
         ];
     }
 
@@ -93,10 +104,68 @@ class Hacknslash extends Table
         $this->gamestate->nextState('continueTurn');
     }
 
+    public function stCooldown(): void
+    {
+        $this->DbQuery('UPDATE player_power SET power_cooldown = power_cooldown - 1 WHERE power_cooldown > 0');
+        $this->gamestate->nextState('activateTraps');
+    }
+
+    public function stActivateTraps(): void
+    {
+        $state = $this->loadEngineState();
+        $result = HNS_RoundEngine::activateTraps($state);
+        $this->persistEngineState($result['state']);
+        if (HNS_RoundEngine::isGameLost($result['state'])) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        $this->gamestate->nextState('activateMonsters');
+    }
+
+    public function stActivateMonsters(): void
+    {
+        $state = $this->loadEngineState();
+        $result = HNS_GameEngine::activateMonsters($state, $this->monsters);
+        $this->persistEngineState($result['state']);
+        if (HNS_RoundEngine::isGameLost($result['state'])) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        $this->gamestate->nextState('levelEndCheck');
+    }
+
+    public function stLevelEndCheck(): void
+    {
+        $state = $this->loadEngineState();
+        if (!HNS_GameEngine::isLevelCleared($state)) {
+            $this->resetRoundFlags();
+            $this->gamestate->nextState('nextRound');
+            return;
+        }
+
+        $level = (int) $this->getGameStateValue('current_level');
+        if ($level >= HNS_BOSS_LEVEL) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        $this->setGameStateValue('current_level', $level + 1);
+        $this->setupInitialBoard($level + 1);
+        $this->moveHeroesToCurrentLevelEntry($level + 1);
+        $this->resetRoundFlags();
+        $this->gamestate->nextState('nextLevel');
+    }
+
     public function stNextPlayer(): void
     {
+        if ($this->areAllHeroActionsSpent()) {
+            $this->gamestate->nextState('roundEnd');
+            return;
+        }
+
         $this->activeNextPlayer();
-        $this->resetActivePlayerTurn();
         $this->gamestate->nextState('nextTurn');
     }
 
@@ -107,6 +176,7 @@ class Hacknslash extends Table
         $playerId = (int) $this->getActivePlayerId();
         $tileId = (int) $tile_id;
         $this->moveHeroToTile($playerId, $tileId);
+        $this->DbQuery("UPDATE player SET player_free_move_available = 0 WHERE player_id = $playerId");
 
         $this->notifyAllPlayers('heroMoved', clienttranslate('${player_name} moves'), [
             'player_id' => $playerId,
@@ -121,6 +191,8 @@ class Hacknslash extends Table
     {
         $this->checkAction('actPlayCard');
         $this->setGameStateValue('pending_action', (int) $card_id);
+        $playerId = (int) $this->getActivePlayerId();
+        $this->DbQuery("UPDATE player SET player_main_action_available = 0 WHERE player_id = $playerId");
         $this->gamestate->nextState('resolveAction');
     }
 
@@ -128,6 +200,8 @@ class Hacknslash extends Table
     {
         $this->checkAction('actAttack');
         $this->setGameStateValue('pending_action', (int) $target_id);
+        $playerId = (int) $this->getActivePlayerId();
+        $this->DbQuery("UPDATE player SET player_main_action_available = 0 WHERE player_id = $playerId");
         $this->gamestate->nextState('resolveAction');
     }
 

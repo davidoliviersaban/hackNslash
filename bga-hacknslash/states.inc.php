@@ -25,6 +25,7 @@ $machinestates = [
         'transitions' => [
             'resolveAction' => 20,
             'endTurn' => 70,
+            'roundEnd' => 30,
             'gameEnd' => 99,
         ],
     ],
@@ -37,8 +38,41 @@ $machinestates = [
         'transitions' => [
             'continueTurn' => 10,
             'endTurn' => 70,
+            'roundEnd' => 30,
             'gameEnd' => 99,
         ],
+    ],
+
+    30 => [
+        'name' => 'cooldown',
+        'description' => clienttranslate('Cooldowns tick down...'),
+        'type' => 'game',
+        'action' => 'stCooldown',
+        'transitions' => ['activateTraps' => 40],
+    ],
+
+    40 => [
+        'name' => 'activateTraps',
+        'description' => clienttranslate('Traps activate...'),
+        'type' => 'game',
+        'action' => 'stActivateTraps',
+        'transitions' => ['activateMonsters' => 50, 'gameEnd' => 99],
+    ],
+
+    50 => [
+        'name' => 'activateMonsters',
+        'description' => clienttranslate('Monsters activate...'),
+        'type' => 'game',
+        'action' => 'stActivateMonsters',
+        'transitions' => ['levelEndCheck' => 60, 'gameEnd' => 99],
+    ],
+
+    60 => [
+        'name' => 'levelEndCheck',
+        'description' => clienttranslate('Checking level end...'),
+        'type' => 'game',
+        'action' => 'stLevelEndCheck',
+        'transitions' => ['nextRound' => 10, 'nextLevel' => 10, 'gameEnd' => 99],
     ],
 
     70 => [
@@ -48,6 +82,7 @@ $machinestates = [
         'action' => 'stNextPlayer',
         'transitions' => [
             'nextTurn' => 10,
+            'roundEnd' => 30,
             'gameEnd' => 99,
         ],
     ],

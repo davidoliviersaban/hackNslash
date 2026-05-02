@@ -4,7 +4,35 @@ final class HNS_RoomSlotPattern
 {
     public const MIN_SLOT = 1;
     public const MAX_SLOT = 7;
+    public const BOSS_LEVEL = 8;
     public const MAX_ENCHANTMENTS = 2;
+
+    /**
+     * @param array<int, array<string, mixed>> $monsters
+     * @return array<int, array<string, mixed>>
+     */
+    public static function assignLevelMonsterSlots(int $level, array $monsters): array
+    {
+        if ($level === self::BOSS_LEVEL) {
+            return [];
+        }
+
+        if ($level < self::MIN_SLOT || $level > self::BOSS_LEVEL) {
+            throw new InvalidArgumentException('Level must be between 1 and 8.');
+        }
+
+        if (count($monsters) < $level) {
+            throw new InvalidArgumentException('Not enough monsters to fill level slots.');
+        }
+
+        $slots = [];
+        for ($slot = self::MIN_SLOT; $slot <= $level; $slot++) {
+            $monster = $monsters[$slot - 1];
+            $slots[$slot] = ['type' => 'monster'] + $monster;
+        }
+
+        return $slots;
+    }
 
     /**
      * @param array<int, array<string, mixed>> $slots

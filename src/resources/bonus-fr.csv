@@ -1,49 +1,8 @@
 Name,Description,Targets,Damage,Dash,Range,PushDistance,PullDistance,DrawCards,Combo,Rank
-Attaque,,1,1,0,0-1,0,0,0,,0
-Attaque,,1,1,0,0-1,0,0,0,,0
-Attaque,,1,1,0,0-1,0,0,0,,0
-Attaque,,1,1,0,0-1,0,0,0,,0
-Attaque+,,1,2,0,0,0,0,0,,0
-Attaque+,,1,2,0,0,0,0,0,,0
-Impulsion I,You can dash 1 time for 1 action,0,0,0-1,0,0,0,0,Gratuit après une carte et ignore l'effet enchainé,1
-Impulsion II,You can dash 2 times for 1 action,0,0,0-2,0,0,0,1,Gratuit après une carte et ignore l'effet enchainé,2
-Impulsion III,You can dash 3 times for 1 action,0,0,0-3,0,0,0,2,Gratuit après une carte et ignore l'effet enchainé,3
-Impulsion Attaque I,Dash and hit one target at destination,1,1,1-2,0,0,0,0,,1
-Impulsion Attaque II,Dash and hit one target at destination,1,1,1-2,0,0,0,0,Joue cette carte 2 fois,2
-Impulsion Attaque III,Dash and hit one target at destination,1,2,1-2,0,0,0,0,Joue cette carte 3 fois,3
-Frappes rapides I,Hit quickly several closeby enemies,2,1,0,0-1,0,0,0,Gratuit après le déplacement,1
-Frappes rapides II,Hit quickly several closeby enemies,3,1,0,0-1,0,0,0,Gratuit après le déplacement,2
-Frappes rapides III,Hit quickly several closeby enemies,4,1,0,0-1,0,0,0,Gratuit après le déplacement,3
-Coup puissant I,Hit heavily one target,1,3,0,0,0,0,0,Gratuit après un bouclier cassé,1
-Coup puissant II,Hit heavily one target,1,3,0,0-1,0,0,0,Gratuit après un bouclier cassé,2
-Coup puissant III,Hit heavily one target,1,4,0,0-1,0-1,0,0,Gratuit après un bouclier cassé,3
-Tourbillon I,Attack all surrounding enemies,∞,1,0-1,0,0,0,0,Gratuit après un kill,1
-Tourbillon II,Attack all surrounding enemies,∞,1,0-1,0-1,0,0,0,Gratuit après un kill,2
-Tourbillon III,Attack all surrounding enemies,∞,2,0-1,0-1,0,0-2,0,Gratuit après un kill,3
-Projection I,Grabs enemy and throw it anywhere,1,0,0,0,1-3,0,0,Gratuit après un dash,1
-Projection II,Grabs enemy and throw it anywhere,1,0,0,0-1,1-3,0,0,Gratuit après un dash,2
-Projection III,Grabs enemy and throw it anywhere,1,1,0,0-1,1-3,0,0,Gratuit après un dash,3
-Saut I,,∞,0,0-2,0,0,0,0,Gratuit à la place du déplacement,1
-Saut II,,∞,0,0-2,0,1,0,0,Gratuit à la place du déplacement,2
-Saut III,,∞,1,0-3,0,1,0,0,Gratuit à la place du déplacement,3
-Trou noir I,Pull enemies to one cell,2,0,0,1-2,0,1,0,Attire les ennemis à une distance de  1 de la tuile selectionnée,1
-Trou noir II,Pull enemies to one cell,3,1,0,1-2,0,1,0,Attire les ennemis à une distance de  1 de la tuile selectionnée,2
-Trou noir III,Pull enemies to one cell,4,1,0,1-2,0,1-2,0,Attire les ennemis à une distance maximale de 2 de la tuile selectionnée,3
-Tir précis I,Fire an arrow,1,1,0,1-2,1,0,0,Gratuit après avoir attiré ou repoussé,1
-Tir précis II,Fire an arrow,1,2,0,1-2,1,0,0,Gratuit après avoir attiré ou repoussé,2
-Tir précis III,Fire an arrow,1,3,0,1-2,1-2,0,0,Gratuit après avoir attiré ou repoussé,3
-Tir Rapide I,Fire several arrows,2,1,0,2-3,0,0,0,Gratuit après le déplacement,1
-Tir Rapide II,Fire several arrows,3,1,0,2-3,0,0,0,Gratuit après le déplacement,2
-Tir Rapide III,Fire several arrows,4,1,0,2-4,0,0,0,Gratuit après le déplacement,3
-Renforcement I,Increase your velocity,1,0,0,0-2,0,0,0,La prochaine carte est jouée 2 fois,1
-Renforcement II,Increase your velocity,1,0,0,0-2,0,0,1,La prochaine carte est jouée 2 fois,2
-Renforcement III,Increase your velocity,1,0,1,0-4,0,0,1,La prochaine carte est jouée 2 fois,3
-Soin I,regain health,1,-1,0,0-2,0,0,0,Gratuit après un kill,1
-Soin II,regain health,1,-2,0,0-2,0,0,0,Gratuit après un kill,2
-Soin III,regain health,1,-4,0,0-3,0,0,0,Gratuit après un kill,3
-Boule de feu I,Throw fireball,2,1,0,1-2,0,0,0,Ignore le bouclier. Cible une zone de 9 tuiles,1
-Boule de feu II,Throw fireball,2,2,0,1-2,0,0,0,Ignore le bouclier. Cible une zone de 9 tuiles,2
-Boule de feu III,Throw fireball,2,3,0,1-2,0,0,0,Ignore le bouclier. Cible une zone de 9 tuiles,3
-Vol de vie I,Drain life,1,1,0,0,0,0,0,Ignore le bouclier. Gagne 1 PV,1
-Vol de vie II,Drain life,1,2,0,0,0,0,0,Ignore le bouclier. Gagne 1 PV,2
-Vol de vie III,Drain life,1,2,0,0,0,0,0,Ignore le bouclier. Gagne 2 PV,3
+Attaque,Attaque de base. Inflige 1 degat a portee 1 diagonales incluses. Cooldown 1.,1,1,0,0-1 diagonale,0,0,0,,0
+Attaque,Attaque de base. Inflige 1 degat a portee 1 diagonales incluses. Cooldown 1.,1,1,0,0-1 diagonale,0,0,0,,0
+Coup,Carte de depart. Inflige 2 degats a portee 1 orthogonale. Cooldown 1.,1,2,0,0-1 orthogonal,0,0,0,,0
+Impulsion I,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a 2 cases. Ne peut pas cibler un obstacle. Cooldown 2.,0,0,1-2 orthogonal,0,0,0,0,Gratuit apres une carte,1
+Impulsion II,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a 2 cases. Ne peut pas cibler un obstacle. Cooldown 2.,0,0,1-2 orthogonal,0,0,0,0,Gratuit apres une carte,2
+Impulsion III,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a 2 cases. Ne peut pas cibler un obstacle. Cooldown 1.,0,0,1-2 orthogonal,0,0,0,0,Gratuit apres une carte,3
+Trou noir I,Attaque a distance. Selectionne une case a portee 2 diagonales incluses puis attire jusqu'a 2 monstres a distance 1 de cette case. Cooldown 2.,2,0,0,0-2 diagonale,0,1,0,Declenche apres attraction ou poussee,1

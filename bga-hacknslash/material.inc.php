@@ -8,8 +8,10 @@
 require_once(__DIR__ . '/modules/material/constants.inc.php');
 require_once(__DIR__ . '/modules/material/tiles.inc.php');
 require_once(__DIR__ . '/modules/material/monsters.inc.php');
+require_once(__DIR__ . '/modules/material/bosses.inc.php');
 require_once(__DIR__ . '/modules/material/bonus_cards.inc.php');
 
 $this->tile_types = $tile_types;
 $this->monsters = $monsters;
+$this->bosses = $bosses;
 $this->bonus_cards = $bonus_cards;

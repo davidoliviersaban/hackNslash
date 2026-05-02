@@ -24,4 +24,15 @@ final class StructureTest extends TestCase
             $this->assertFileExists($root . '/' . $file);
         }
     }
+
+    public function testStateMachineContainsFullRoundCycleStates(): void
+    {
+        $states = file_get_contents(dirname(__DIR__) . '/states.inc.php');
+
+        $this->assertStringContainsString("'name' => 'cooldown'", $states);
+        $this->assertStringContainsString("'name' => 'activateTraps'", $states);
+        $this->assertStringContainsString("'name' => 'activateMonsters'", $states);
+        $this->assertStringContainsString("'name' => 'levelEndCheck'", $states);
+        $this->assertStringContainsString("'gameEnd' => 99", $states);
+    }
 }

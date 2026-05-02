@@ -6,6 +6,46 @@ require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 
 final class RoomSlotPatternTest extends TestCase
 {
+    public function testLevelOneAssignsOneMonsterToSlotOne(): void
+    {
+        $slots = HNS_RoomSlotPattern::assignLevelMonsterSlots(1, [
+            ['monster_id' => 1, 'size' => 'small'],
+        ]);
+
+        $this->assertSame([
+            1 => ['type' => 'monster', 'monster_id' => 1, 'size' => 'small'],
+        ], $slots);
+    }
+
+    public function testLevelThreeAssignsMonstersToSlotsOneThroughThree(): void
+    {
+        $slots = HNS_RoomSlotPattern::assignLevelMonsterSlots(3, [
+            ['monster_id' => 1, 'size' => 'small'],
+            ['monster_id' => 7, 'size' => 'large'],
+            ['monster_id' => 2, 'size' => 'small'],
+        ]);
+
+        $this->assertSame([1, 2, 3], array_keys($slots));
+        $this->assertSame(1, $slots[1]['monster_id']);
+        $this->assertSame(7, $slots[2]['monster_id']);
+        $this->assertSame(2, $slots[3]['monster_id']);
+    }
+
+    public function testLevelSlotAssignmentRequiresEnoughMonsters(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Not enough monsters to fill level slots.');
+
+        HNS_RoomSlotPattern::assignLevelMonsterSlots(2, [
+            ['monster_id' => 1, 'size' => 'small'],
+        ]);
+    }
+
+    public function testLevelEightIsBossLevelAndDoesNotAssignMonsterSlots(): void
+    {
+        $this->assertSame([], HNS_RoomSlotPattern::assignLevelMonsterSlots(8, []));
+    }
+
     public function testValidRoomAcceptsLargeMonstersOnEvenSlotsAndSmallMonstersOrEnchantmentsOnOddSlots(): void
     {
         $room = [

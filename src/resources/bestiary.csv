@@ -1,19 +1,10 @@
-Level, Name,Description,Size,Dash,Attack,Health,Damage,Range
-1, Fungus,explosent au contact a la fin de votre tour,petit,1,explosion,1,2,0
-1, Goblin bomber,lancent des bombes qui explosent a l'impact,gros,1,lance grenade,3,1,1-2
-1, Slime,empeche tout deplacement au contact du joueur,petit,1,prison,2,0,0
-1, Boar,fonce sur son adversaire et le repousse,gros,1,repousse,4,1,1
-1, Orc,frappe violemment le sol,gros,1,frappe puissante,4,2,0-1
-1, Red Cap,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
-1, Evil Eye,lance un rayon par adversaire,gros,0,faiblesse,1,1,0-3
-1, Wolf Rider,cree 1 gobelin sur sa case puis fuit,gros,0,generateur,3,0,0
-1, Goblin,petite creature,petit,1,morsure,1,1,0
-2, Fungus,explosent au contact a la fin de votre tour,petit,1,explosion,2,2,0
-2, Goblin bomber,lancent des bombes qui explosent a l'impact,gros,1,lance grenade,3,2,1-2
-2, Slime,empeche tout deplacement au contact du joueur,petit,1,prison,3,1,0
-2, Boar,fonce sur son adversaire et le repousse,gros,1,repousse,5,1,0-1
-2, Orc,frappe violemment le sol,gros,1,frappe puissante,6,2,0-1
-2, Red Cap,volent et lancent des sorts,gros,1 vol,douleur,2,1,1-3
-2, Evil Eye,lance un rayon par adversaire,gros,0,faiblesse,2,1,0-3
-2, Wolf Rider,cree 1 gobelin sur sa case puis fuit,gros,0,generateur,6,0,0
-2, Goblin,petite creature,petit,2,morsure,1,1,0
+Level,Name,Description,Size,Dash,Attack,Health,Damage,Range,Nb
+1,Goblin,Petite creature. Arrive toujours par paire. Se deplace orthogonalement vers le heros le plus proche.,petit,1 orthogonal,morsure orthogonale,1,1,1 orthogonal,2
+1,Slime,Arrive toujours par paire. Se deplace en diagonale et bloque les deplacements du heros au contact orthogonal.,petit,2 diagonale,prison,2,0,1 orthogonal,2
+1,Evil Eye,Ne bouge pas. Tire un rayon a distance avec diagonales incluses.,petit,0,rayon,2,1,3 diagonale,1
+1,Kamikaze,Explose au contact orthogonal d'un heros ou quand il meurt.,petit,1 diagonale,explosion,1,2,1 orthogonal,1
+1,Wizard,Attaque orthogonalement a distance et ne touche pas une cible sur sa propre case.,petit,1 orthogonal,sort,2,1,1-4 orthogonal,1
+1,Bomber,Attaque orthogonalement a moyenne distance et ne peut pas tirer au contact.,petit,1 orthogonal,bombe,3,1,2-3 orthogonal,1
+1,Orc,Frappe les 3 cases devant lui. Case frontale orthogonale et 2 diagonales adjacentes.,gros,1 orthogonal,frappe frontale,4,2,1 arc frontal,1
+1,Pig Rider,Charge le heros. Prend sa case et le pousse d'une case. Collision si la poussee est impossible.,gros,1 orthogonal,charge,4,1,1 orthogonal,1
+1,Wolf Rider,Invoque 1 gobelin sur une case orthogonale adjacente puis fuit d'une case loin du heros.,gros,1 orthogonal puis fuite,generateur,3,0,0,1

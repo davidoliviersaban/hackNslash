@@ -37,16 +37,25 @@ CREATE TABLE IF NOT EXISTS `entity` (
     `entity_tile_id` INT(10) UNSIGNED DEFAULT NULL,
     `entity_health` SMALLINT NOT NULL DEFAULT '1',
     `entity_state` VARCHAR(32) NOT NULL DEFAULT 'active',
+    `entity_monster_size` VARCHAR(16) DEFAULT NULL COMMENT 'small, big, boss',
+    `entity_boss_key` VARCHAR(32) DEFAULT NULL COMMENT 'slasher, striker',
+    `entity_phase` TINYINT UNSIGNED NOT NULL DEFAULT '0',
+    `entity_status` VARCHAR(32) DEFAULT NULL COMMENT 'stuck, etc.',
+    `entity_on_death` VARCHAR(32) DEFAULT NULL COMMENT 'explode, etc.',
+    `entity_shield_broken` TINYINT UNSIGNED NOT NULL DEFAULT '0',
+    `entity_slot` TINYINT UNSIGNED DEFAULT NULL,
     PRIMARY KEY (`entity_id`),
     KEY `fk_entity_tile` (`entity_tile_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `player_power` (
+    `player_power_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
     `player_id` INT(10) UNSIGNED NOT NULL,
+    `power_slot` TINYINT UNSIGNED NOT NULL,
     `power_key` VARCHAR(32) NOT NULL,
     `power_cooldown` TINYINT UNSIGNED NOT NULL DEFAULT '0',
-    PRIMARY KEY (`player_id`, `power_key`),
-    UNIQUE KEY `player_power_unique` (`player_id`, `power_key`)
+    PRIMARY KEY (`player_power_id`),
+    UNIQUE KEY `player_power_slot_unique` (`player_id`, `power_slot`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS `free_chain` (

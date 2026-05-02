@@ -47,12 +47,49 @@ final class BoardRulesTest extends TestCase
     public function testOccupiedTilesCannotBeEnteredExceptByTheirCurrentOccupant(): void
     {
         $entities = [
-            10 => ['id' => 10, 'tile_id' => 2, 'state' => 'active'],
-            11 => ['id' => 11, 'tile_id' => 3, 'state' => 'dead'],
+            10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 2, 'state' => 'active'],
+            11 => ['id' => 11, 'type' => 'hero', 'tile_id' => 3, 'state' => 'dead'],
         ];
 
         $this->assertFalse(HNS_BoardRules::isTileAvailable(2, $entities));
         $this->assertTrue(HNS_BoardRules::isTileAvailable(2, $entities, 10));
         $this->assertTrue(HNS_BoardRules::isTileAvailable(3, $entities));
+    }
+
+    public function testMonsterTileCanContainUpToTwoSmallMonsters(): void
+    {
+        $entities = [
+            20 => ['id' => 20, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+        ];
+
+        $this->assertTrue(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
+
+        $entities[22] = ['id' => 22, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'];
+        $entities[23] = ['id' => 23, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'state' => 'active'];
+
+        $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[23], 23));
+    }
+
+    public function testBigMonstersCannotShareWithAnyOtherMonster(): void
+    {
+        $entities = [
+            20 => ['id' => 20, 'type' => 'monster', 'monster_size' => 'big', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+            22 => ['id' => 22, 'type' => 'monster', 'monster_size' => 'big', 'tile_id' => 4, 'state' => 'active'],
+        ];
+
+        $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
+        $this->assertFalse(HNS_BoardRules::canEnterTile(3, $entities, $entities[22], 22));
+    }
+
+    public function testHeroesCannotEnterMonsterOccupiedTiles(): void
+    {
+        $entities = [
+            10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 1, 'state' => 'active'],
+            20 => ['id' => 20, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+        ];
+
+        $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[10], 10));
     }
 }
