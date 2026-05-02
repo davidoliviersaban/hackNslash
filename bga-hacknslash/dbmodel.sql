@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS `card` (
     `card_location` VARCHAR(32) NOT NULL COMMENT 'deck, hand_PLAYER, discard, market, monster_row, etc.',
     `card_location_arg` INT(11) NOT NULL DEFAULT '0',
     PRIMARY KEY (`card_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `tile` (
     `tile_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS `tile` (
     `tile_level` TINYINT UNSIGNED NOT NULL DEFAULT '1',
     PRIMARY KEY (`tile_id`),
     UNIQUE KEY `coords_level` (`tile_x`, `tile_y`, `tile_level`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `entity` (
     `entity_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -45,8 +45,9 @@ CREATE TABLE IF NOT EXISTS `entity` (
     `entity_shield_broken` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     `entity_slot` TINYINT UNSIGNED DEFAULT NULL,
     PRIMARY KEY (`entity_id`),
-    KEY `fk_entity_tile` (`entity_tile_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
+    KEY `fk_entity_tile` (`entity_tile_id`),
+    KEY `entity_type_owner` (`entity_type`, `entity_owner`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `player_power` (
     `player_power_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -56,7 +57,7 @@ CREATE TABLE IF NOT EXISTS `player_power` (
     `power_cooldown` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     PRIMARY KEY (`player_power_id`),
     UNIQUE KEY `player_power_slot_unique` (`player_id`, `power_slot`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS `free_chain` (
     `chain_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -64,10 +65,10 @@ CREATE TABLE IF NOT EXISTS `free_chain` (
     `used_action_keys` TEXT NOT NULL,
     `passed_player_ids` TEXT NOT NULL,
     PRIMARY KEY (`chain_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `global_var` (
     `var_name` VARCHAR(64) NOT NULL,
     `var_value` TEXT,
     PRIMARY KEY (`var_name`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

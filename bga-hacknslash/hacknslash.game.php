@@ -112,6 +112,12 @@ class Hacknslash extends Table
         return [];
     }
 
+    public function stGameSetup(): void
+    {
+        // The full setup happens in setupNewGame(). This handler is kept so the
+        // state machine has an explicit entry point for the gameSetup manager state.
+    }
+
     public function stResolveAction(): void
     {
         // Rule resolution will be specified later. For now, every accepted action
