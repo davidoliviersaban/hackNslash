@@ -1,0 +1,16 @@
+{
+  "100": {
+    "name": "Scenario",
+    "values": {
+      "1": { "name": "Tutorial dungeon" }
+    },
+    "default": 1
+  },
+  "101": {
+    "name": "Difficulty",
+    "values": {
+      "1": { "name": "Normal" }
+    },
+    "default": 1
+  }
+}

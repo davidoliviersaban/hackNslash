@@ -1,0 +1,5 @@
+<?php
+
+const HNS_DEFAULT_HEALTH = 10;
+const HNS_DEFAULT_ACTION_POINTS = 3;
+const HNS_FIRST_LEVEL = 1;

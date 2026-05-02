@@ -1,0 +1,12 @@
+{
+  "name": "dsaban/bga-hacknslash",
+  "description": "BoardGameArena scaffold for HackNSlash",
+  "type": "project",
+  "require-dev": {
+    "phpunit/phpunit": "^10.0"
+  },
+  "scripts": {
+    "test": "phpunit",
+    "syntax": "find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 php -l"
+  }
+}

@@ -1,0 +1,58 @@
+#hns_wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+}
+
+#hns_board {
+  position: relative;
+  min-height: 520px;
+  overflow: auto;
+  background: #171717;
+  border: 2px solid #3d342c;
+  border-radius: 8px;
+}
+
+.hns_tile {
+  position: absolute;
+  width: 88px;
+  height: 88px;
+  box-sizing: border-box;
+  border: 1px solid #6f6153;
+  background: #2c2926;
+  color: #f5ead8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.hns_tile_entry { background: #35543a; }
+.hns_tile_exit { background: #553843; }
+.hns_tile_wall { background: #111; }
+.hns_tile_spikes { background: #5b4d28; }
+
+.hns_tile.hns_selectable {
+  outline: 3px solid #d3a642;
+}
+
+.hns_entity {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #4ba3ff;
+  border: 2px solid white;
+  pointer-events: none;
+}
+
+#hns_cards {
+  min-height: 120px;
+}
+
+@media (max-width: 800px) {
+  #hns_wrap {
+    grid-template-columns: 1fr;
+  }
+}
