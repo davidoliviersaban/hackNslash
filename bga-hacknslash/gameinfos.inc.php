@@ -13,7 +13,7 @@ $gameinfos = [
     'publisher_bgg_id' => 999999,
     'bgg_id' => 999999,
 
-    'players' => [1, 2, 3, 4],
+    'players' => [1, 2],
     'player_colors' => ['ff0000', '008000', '0000ff', 'ffa500'],
     'favorite_colors_support' => true,
 
@@ -29,8 +29,8 @@ $gameinfos = [
     'tie_breaker_description' => totranslate('The player with the most victory points wins'),
 
     'losers_not_ranked' => false,
-    'solo_mode_ranked' => false,
-    'is_coop' => 0,
+    'solo_mode_ranked' => true,
+    'is_coop' => 1,
     'language_dependency' => false,
     'db_undo_support' => true,
 ];
