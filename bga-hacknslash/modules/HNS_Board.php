@@ -45,6 +45,7 @@ trait HNS_Board
             'tiles' => $this->getTilesForLevel((int) $this->getGameStateValue('current_level')),
             'entities' => $this->getEntities(),
             'bosses' => $this->bosses ?? [],
+            'monster_material' => $this->monsters ?? [],
             'level_monster_abilities' => $this->getLevelMonsterAbilities(),
         ];
     }
