@@ -6,6 +6,8 @@ ALTER TABLE `player` ADD `player_action_points` TINYINT UNSIGNED NOT NULL DEFAUL
 ALTER TABLE `player` ADD `player_position_x` SMALLINT NOT NULL DEFAULT '0';
 ALTER TABLE `player` ADD `player_position_y` SMALLINT NOT NULL DEFAULT '0';
 ALTER TABLE `player` ADD `player_level` TINYINT UNSIGNED NOT NULL DEFAULT '1';
+ALTER TABLE `player` ADD `player_free_move_available` TINYINT UNSIGNED NOT NULL DEFAULT '1';
+ALTER TABLE `player` ADD `player_main_action_available` TINYINT UNSIGNED NOT NULL DEFAULT '1';
 
 CREATE TABLE IF NOT EXISTS `card` (
     `card_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -37,6 +39,22 @@ CREATE TABLE IF NOT EXISTS `entity` (
     `entity_state` VARCHAR(32) NOT NULL DEFAULT 'active',
     PRIMARY KEY (`entity_id`),
     KEY `fk_entity_tile` (`entity_tile_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
+
+CREATE TABLE IF NOT EXISTS `player_power` (
+    `player_id` INT(10) UNSIGNED NOT NULL,
+    `power_key` VARCHAR(32) NOT NULL,
+    `power_cooldown` TINYINT UNSIGNED NOT NULL DEFAULT '0',
+    PRIMARY KEY (`player_id`, `power_key`),
+    UNIQUE KEY `player_power_unique` (`player_id`, `power_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS `free_chain` (
+    `chain_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `active_event_chain` TEXT NOT NULL,
+    `used_action_keys` TEXT NOT NULL,
+    `passed_player_ids` TEXT NOT NULL,
+    PRIMARY KEY (`chain_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8 AUTO_INCREMENT=1;
 
 CREATE TABLE IF NOT EXISTS `global_var` (
