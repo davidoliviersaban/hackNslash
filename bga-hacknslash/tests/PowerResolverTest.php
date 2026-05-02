@@ -66,6 +66,17 @@ final class PowerResolverTest extends TestCase
         ], $result['events']);
     }
 
+    public function testAttackCannotTargetAlliedHero(): void
+    {
+        $state = $this->state;
+        $state['entities'][11] = ['id' => 11, 'type' => 'hero', 'owner' => 2, 'tile_id' => 2, 'health' => 10, 'state' => 'active'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Cannot target an allied hero with attack.');
+
+        HNS_PowerResolver::resolve('attack', 10, ['target_entity_id' => 11], $state, $this->powers);
+    }
+
     public function testAttackCanHitAdjacentDiagonalTarget(): void
     {
         $result = HNS_PowerResolver::resolve('attack', 10, ['target_entity_id' => 22], $this->state, $this->powers);
