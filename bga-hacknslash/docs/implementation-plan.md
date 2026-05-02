@@ -60,6 +60,17 @@ Resolved actions produce an active event chain, for example `afterMove`, `afterD
 - Store passed players for the current free-action window.
 - Store monster slot number separately from monster material id.
 
+## Room Slot Pattern
+
+Rooms use seven numbered slots.
+
+- Large monsters must be placed on even slots: 2, 4, and 6.
+- Small monsters must be placed on odd slots: 1, 3, 5, and 7.
+- Room events such as spikes and shield also use odd slots.
+- A room can contain at most two event slots.
+- Random room generation must preserve this pattern.
+- Static room material must be validated against this pattern before it is used by setup logic.
+
 ## TDD Milestones
 
 1. Event chain domain object: replacing chains, matching triggers, consuming events.
