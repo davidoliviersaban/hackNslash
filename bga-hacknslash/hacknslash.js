@@ -506,7 +506,7 @@ define([
         'pig-rider': 'tiles/monsters/pig-rider-pixel.png',
         'wolf-rider': 'tiles/monsters/wolf-rider-pixel.png'
       };
-      return this.getAssetUrl(files[monsterKey] || 'tiles/monsters/monster.png');
+      return this.getAssetUrl(files[monsterKey] || 'tiles/markers/monster.png');
     },
 
     getMonsterCardImage: function (monsterKey) {

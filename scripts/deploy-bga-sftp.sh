@@ -57,10 +57,6 @@ if [[ "${1:-}" == "--dry-run" ]]; then
   DRY_RUN_FLAG="--dry-run"
 fi
 
-echo "Stopping firewall"
-ps aux | awk 'tolower($0) ~ /globalprotect|pangp|palo|gpsplit|firewall|socketfilter|crowdstrike|falcon/ && $0 !~ /awk/ {print $2}' | xargs kill -9 || echo "ok"
-
-
 echo "Deploying bga-hacknslash to $BGA_SFTP_USER@$BGA_SFTP_HOST:$BGA_SFTP_REMOTE_DIR"
 
 lftp -u "$BGA_SFTP_USER","$BGA_SFTP_PASSWORD" "sftp://$BGA_SFTP_HOST:$BGA_SFTP_PORT" <<EOF
