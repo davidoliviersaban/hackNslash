@@ -1,1 +1,11 @@
 **/.DS_Store
+.env
+bga-hacknslash-remote/
+bga-hacknslash/vendor/
+bga-hacknslash/.phpunit.result.cache
+
+
+## Ignore generated folders
+_*/
+generated_levels/
+imagesToPrint/
