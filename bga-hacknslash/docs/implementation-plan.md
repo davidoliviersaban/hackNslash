@@ -66,8 +66,9 @@ Rooms use seven numbered slots.
 
 - Large monsters must be placed on even slots: 2, 4, and 6.
 - Small monsters must be placed on odd slots: 1, 3, 5, and 7.
-- Room events such as spikes and shield also use odd slots.
-- A room can contain at most two event slots.
+- Monster enchantments such as spikes and shield also use odd slots.
+- A room can contain at most two monster enchantment slots.
+- Monster enchantments in the same room must be different; a room cannot contain two shield enchantments.
 - Random room generation must preserve this pattern.
 - Static room material must be validated against this pattern before it is used by setup logic.
 

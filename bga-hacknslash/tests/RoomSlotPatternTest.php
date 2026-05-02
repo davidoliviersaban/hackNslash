@@ -6,16 +6,16 @@ require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 
 final class RoomSlotPatternTest extends TestCase
 {
-    public function testValidRoomAcceptsLargeMonstersOnEvenSlotsAndSmallMonstersOrEventsOnOddSlots(): void
+    public function testValidRoomAcceptsLargeMonstersOnEvenSlotsAndSmallMonstersOrEnchantmentsOnOddSlots(): void
     {
         $room = [
             1 => ['type' => 'monster', 'size' => 'small'],
             2 => ['type' => 'monster', 'size' => 'large'],
-            3 => ['type' => 'event', 'event' => 'shield'],
+            3 => ['type' => 'enchantment', 'enchantment' => 'shield'],
             4 => ['type' => 'monster', 'size' => 'large'],
             5 => ['type' => 'monster', 'size' => 'small'],
             6 => ['type' => 'monster', 'size' => 'large'],
-            7 => ['type' => 'event', 'event' => 'spikes'],
+            7 => ['type' => 'enchantment', 'enchantment' => 'spikes'],
         ];
 
         $this->assertSame([], HNS_RoomSlotPattern::validate($room));
@@ -39,23 +39,33 @@ final class RoomSlotPatternTest extends TestCase
         $this->assertContains('slot 2 cannot contain a small monster', $errors);
     }
 
-    public function testEventOnEvenSlotIsRejected(): void
+    public function testEnchantmentOnEvenSlotIsRejected(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            2 => ['type' => 'event', 'event' => 'shield'],
+            2 => ['type' => 'enchantment', 'enchantment' => 'shield'],
         ]);
 
-        $this->assertContains('slot 2 cannot contain an event', $errors);
+        $this->assertContains('slot 2 cannot contain an enchantment', $errors);
     }
 
-    public function testRoomRejectsMoreThanTwoEvents(): void
+    public function testRoomRejectsMoreThanTwoEnchantments(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            1 => ['type' => 'event', 'event' => 'shield'],
-            3 => ['type' => 'event', 'event' => 'spikes'],
-            5 => ['type' => 'event', 'event' => 'spikes'],
+            1 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            3 => ['type' => 'enchantment', 'enchantment' => 'spikes'],
+            5 => ['type' => 'enchantment', 'enchantment' => 'weakness'],
         ]);
 
-        $this->assertContains('room cannot contain more than 2 events', $errors);
+        $this->assertContains('room cannot contain more than 2 enchantments', $errors);
+    }
+
+    public function testRoomRejectsDuplicateEnchantments(): void
+    {
+        $errors = HNS_RoomSlotPattern::validate([
+            1 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            3 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+        ]);
+
+        $this->assertContains('room cannot contain duplicate enchantment shield', $errors);
     }
 }

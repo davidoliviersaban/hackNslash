@@ -4,7 +4,7 @@ final class HNS_RoomSlotPattern
 {
     public const MIN_SLOT = 1;
     public const MAX_SLOT = 7;
-    public const MAX_EVENTS = 2;
+    public const MAX_ENCHANTMENTS = 2;
 
     /**
      * @param array<int, array<string, mixed>> $slots
@@ -13,7 +13,8 @@ final class HNS_RoomSlotPattern
     public static function validate(array $slots): array
     {
         $errors = [];
-        $eventCount = 0;
+        $enchantmentCount = 0;
+        $enchantments = [];
 
         foreach ($slots as $slot => $content) {
             $slot = (int) $slot;
@@ -23,11 +24,23 @@ final class HNS_RoomSlotPattern
             }
 
             $type = $content['type'] ?? null;
-            if ($type === 'event') {
-                $eventCount++;
+            if ($type === 'enchantment') {
+                $enchantmentCount++;
                 if (self::isEvenSlot($slot)) {
-                    $errors[] = "slot $slot cannot contain an event";
+                    $errors[] = "slot $slot cannot contain an enchantment";
                 }
+
+                $enchantment = $content['enchantment'] ?? null;
+                if (!is_string($enchantment) || $enchantment === '') {
+                    $errors[] = "slot $slot has an unknown enchantment";
+                    continue;
+                }
+
+                if (isset($enchantments[$enchantment])) {
+                    $errors[] = "room cannot contain duplicate enchantment $enchantment";
+                }
+
+                $enchantments[$enchantment] = true;
                 continue;
             }
 
@@ -50,8 +63,8 @@ final class HNS_RoomSlotPattern
             }
         }
 
-        if ($eventCount > self::MAX_EVENTS) {
-            $errors[] = 'room cannot contain more than 2 events';
+        if ($enchantmentCount > self::MAX_ENCHANTMENTS) {
+            $errors[] = 'room cannot contain more than 2 enchantments';
         }
 
         return $errors;
