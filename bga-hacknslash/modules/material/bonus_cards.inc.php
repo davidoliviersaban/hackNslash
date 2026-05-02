@@ -69,3 +69,5 @@ $bonus_cards = [
         'upgrades_to' => null,
     ],
 ];
+
+return $bonus_cards;

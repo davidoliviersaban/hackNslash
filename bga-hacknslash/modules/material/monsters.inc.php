@@ -175,3 +175,5 @@ $monsters = [
         'can_attack_and_move' => true,
     ],
 ];
+
+return $monsters;

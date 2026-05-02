@@ -100,3 +100,5 @@ $bosses = [
         ],
     ],
 ];
+
+return $bosses;

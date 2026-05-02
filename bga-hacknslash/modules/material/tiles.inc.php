@@ -8,3 +8,5 @@ $tile_types = [
     'hole' => ['name' => clienttranslate('Hole'), 'walkable' => false],
     'spikes' => ['name' => clienttranslate('Spikes'), 'walkable' => true],
 ];
+
+return $tile_types;
