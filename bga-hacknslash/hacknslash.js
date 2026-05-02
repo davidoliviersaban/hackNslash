@@ -84,8 +84,31 @@ define([
       dojo.subscribe('heroMoved', this, 'notif_heroMoved');
     },
 
-    notif_heroMoved: function () {
-      this.ajaxcall('/hacknslash/hacknslash/reload.html', {}, this, function () {}, function () {});
+    notif_heroMoved: function (notif) {
+      var entityId = notif.args.entity_id || notif.args.player_id;
+      var tileId = notif.args.tile_id;
+      if (!entityId || !tileId || !this.gamedatas) {
+        return;
+      }
+
+      var tile = this.gamedatas.tiles && this.gamedatas.tiles[tileId];
+      if (!tile) {
+        return;
+      }
+
+      var entityNode = $('hns_entity_' + entityId);
+      if (!entityNode) {
+        return;
+      }
+
+      dojo.style(entityNode, {
+        left: (tile.x * 96 + 56) + 'px',
+        top: (tile.y * 96 + 56) + 'px'
+      });
+
+      if (this.gamedatas.entities && this.gamedatas.entities[entityId]) {
+        this.gamedatas.entities[entityId].tile_id = tileId;
+      }
     }
   });
 });

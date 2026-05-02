@@ -86,7 +86,17 @@ class Hacknslash extends Table
 
     public function getGameProgression(): int
     {
-        return 0;
+        $level = (int) $this->getGameStateValue('current_level');
+        if ($level <= HNS_FIRST_LEVEL) {
+            return 0;
+        }
+        if ($level >= HNS_BOSS_LEVEL) {
+            return 100;
+        }
+
+        $progression = (int) floor((($level - HNS_FIRST_LEVEL) / (HNS_BOSS_LEVEL - HNS_FIRST_LEVEL)) * 100);
+
+        return max(0, min(100, $progression));
     }
 
     public function argPlayerTurn(): array
@@ -95,6 +105,11 @@ class Hacknslash extends Table
             'action_points' => $this->getActivePlayerActionPoints(),
             'selected_tile' => (int) $this->getGameStateValue('selected_tile'),
         ];
+    }
+
+    public function argGameEnd(): array
+    {
+        return [];
     }
 
     public function stResolveAction(): void
