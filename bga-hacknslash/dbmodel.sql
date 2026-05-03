@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS `entity` (
     `entity_phase` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     `entity_status` VARCHAR(32) DEFAULT NULL COMMENT 'stuck, etc.',
     `entity_on_death` VARCHAR(32) DEFAULT NULL COMMENT 'explode, etc.',
+    `entity_has_shield` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     `entity_shield_broken` TINYINT UNSIGNED NOT NULL DEFAULT '0',
     `entity_slot` TINYINT UNSIGNED DEFAULT NULL,
     PRIMARY KEY (`entity_id`),

@@ -48,6 +48,7 @@ final class MonsterMaterialTest extends TestCase
         $evilEye = $monsters[3];
 
         $this->assertSame('Evil Eye', $evilEye['name']);
+        $this->assertSame(1, $evilEye['health']);
         $this->assertSame(0, $evilEye['move']);
         $this->assertFalse($evilEye['can_move']);
         $this->assertSame(3, $evilEye['range']);
@@ -73,7 +74,7 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame('explode', $kamikaze['on_death']);
     }
 
-    public function testWizardHasTwoHealthAndAttacksOrthogonallyAtRangeOneToFour(): void
+    public function testWizardHasTwoHealthAndAttacksInChebyshevRangeTwoToFour(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
 
@@ -82,15 +83,15 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame('Wizard', $wizard['name']);
         $this->assertSame(2, $wizard['health']);
         $this->assertSame(4, $wizard['range']);
-        $this->assertSame(1, $wizard['min_range']);
-        $this->assertSame('orthogonal', $wizard['range_metric']);
+        $this->assertSame(2, $wizard['min_range']);
+        $this->assertSame('chebyshev', $wizard['range_metric']);
         $this->assertSame(1, $wizard['damage']);
         $this->assertSame(1, $wizard['move']);
         $this->assertSame('orthogonal', $wizard['move_metric']);
         $this->assertTrue($wizard['can_move']);
     }
 
-    public function testBomberHasThreeHealthAndAttacksOrthogonallyAtRangeTwoToThree(): void
+    public function testBomberHasThreeHealthAndAttacksInChebyshevRangeTwoToThree(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
 
@@ -102,7 +103,7 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame('orthogonal', $bomber['move_metric']);
         $this->assertSame(3, $bomber['range']);
         $this->assertSame(2, $bomber['min_range']);
-        $this->assertSame('orthogonal', $bomber['range_metric']);
+        $this->assertSame('chebyshev', $bomber['range_metric']);
         $this->assertSame(1, $bomber['damage']);
     }
 
@@ -153,5 +154,15 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame('summon_then_flee', $wolfRider['effect']);
         $this->assertSame(1, $wolfRider['summon_monster_id']);
         $this->assertSame(1, $wolfRider['summon_count']);
+    }
+
+    public function testRaiderIsNotAMoveAndAttackExceptionByDefault(): void
+    {
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $raider = $monsters[11];
+
+        $this->assertSame('Raider', $raider['name']);
+        $this->assertFalse($raider['can_attack_and_move']);
     }
 }

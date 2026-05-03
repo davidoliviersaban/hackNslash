@@ -5,9 +5,11 @@ final class HNS_RoundEngine
     /** @param array<string, mixed> $state */
     public static function startRound(array $state): array
     {
+        $actionPoints = count($state['players'] ?? []) <= 1 ? HNS_SOLO_ACTION_POINTS : HNS_MULTIPLAYER_ACTION_POINTS;
         foreach ($state['players'] as &$player) {
             $player['free_move_available'] = true;
-            $player['main_action_available'] = true;
+            $player['action_points'] = $actionPoints;
+            $player['main_action_available'] = $actionPoints > 0;
         }
 
         return $state;
@@ -16,17 +18,51 @@ final class HNS_RoundEngine
     /** @param array<string, mixed> $state */
     public static function consumeFreeMove(array $state, int $playerId): array
     {
+        $playerKey = self::playerKey($state, $playerId);
         self::assertPlayerCan($state, $playerId, 'free_move_available', 'Free move is not available.');
-        $state['players'][$playerId]['free_move_available'] = false;
+        $state['players'][$playerKey]['free_move_available'] = false;
+        if (array_key_exists('action_points', $state['players'][$playerKey])) {
+            $state['players'][$playerKey]['main_action_available'] = (int) $state['players'][$playerKey]['action_points'] > 0;
+        }
 
         return $state;
     }
 
     /** @param array<string, mixed> $state */
-    public static function consumeMainAction(array $state, int $playerId): array
+    public static function consumeMove(array $state, int $playerId): array
     {
+        $playerKey = self::playerKey($state, $playerId);
+        if (self::flag($state['players'][$playerKey]['free_move_available'] ?? false)) {
+            return self::consumeFreeMove($state, $playerId);
+        }
+
+        return self::consumeMainAction($state, $playerId);
+    }
+
+    /** @param array<string, mixed> $state */
+    public static function consumeMainAction(array $state, int $playerId, bool $free = false): array
+    {
+        $playerKey = self::playerKey($state, $playerId);
         self::assertPlayerCan($state, $playerId, 'main_action_available', 'Main action is not available.');
-        $state['players'][$playerId]['main_action_available'] = false;
+        $actionPoints = (int) ($state['players'][$playerKey]['action_points'] ?? 1);
+        if (!$free) {
+            $actionPoints = max(0, $actionPoints - 1);
+        }
+        $state['players'][$playerKey]['free_move_available'] = false;
+        $state['players'][$playerKey]['action_points'] = $actionPoints;
+        $state['players'][$playerKey]['main_action_available'] = $actionPoints > 0;
+
+        return $state;
+    }
+
+    /** @param array<string, mixed> $state */
+    public static function endPlayerTurn(array $state, int $playerId): array
+    {
+        $playerKey = self::playerKey($state, $playerId);
+
+        $state['players'][$playerKey]['free_move_available'] = false;
+        $state['players'][$playerKey]['main_action_available'] = false;
+        $state['players'][$playerKey]['action_points'] = 0;
 
         return $state;
     }
@@ -35,12 +71,36 @@ final class HNS_RoundEngine
     public static function isHeroPhaseComplete(array $state): bool
     {
         foreach ($state['players'] as $player) {
-            if (($player['free_move_available'] ?? false) || ($player['main_action_available'] ?? false)) {
+            if (self::flag($player['free_move_available'] ?? false) || self::flag($player['main_action_available'] ?? false)) {
                 return false;
             }
         }
 
         return true;
+    }
+
+    /** @param array<string, mixed> $state */
+    public static function nextPlayerWithActions(array $state, int $afterPlayerId): ?int
+    {
+        $playerIds = array_map('intval', array_keys($state['players'] ?? []));
+        sort($playerIds);
+        if ($playerIds === []) {
+            return null;
+        }
+
+        $startIndex = array_search($afterPlayerId, $playerIds, true);
+        $startIndex = $startIndex === false ? -1 : $startIndex;
+        $count = count($playerIds);
+
+        for ($offset = 1; $offset <= $count; $offset++) {
+            $playerId = $playerIds[($startIndex + $offset) % $count];
+            $player = $state['players'][$playerId] ?? [];
+            if (self::flag($player['free_move_available'] ?? false) || self::flag($player['main_action_available'] ?? false)) {
+                return $playerId;
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $state */
@@ -135,7 +195,7 @@ final class HNS_RoundEngine
 
         $state = HNS_GameEngine::prepareLevelReward($state, $powers, $powerDeck);
         $nextLevel = (int) ($state['level'] ?? 1) + 1;
-        $events = [['type' => 'levelCleared', 'level' => (int) ($state['level'] ?? 1), 'reward_offer' => $state['reward_offer'] ?? []]];
+        $events = [['type' => 'levelCleared', 'level' => (int) ($state['level'] ?? 1), 'reward_offer' => $state['reward_offer'] ?? [], 'reward_upgrades' => $state['reward_upgrades'] ?? []]];
 
         if ($nextLevel > HNS_BOSS_LEVEL) {
             $state['game_over'] = true;
@@ -155,12 +215,30 @@ final class HNS_RoundEngine
     /** @param array<string, mixed> $state */
     private static function assertPlayerCan(array $state, int $playerId, string $field, string $message): void
     {
-        if (!isset($state['players'][$playerId])) {
+        $playerKey = self::playerKey($state, $playerId);
+        if (!isset($state['players'][$playerKey])) {
             throw new InvalidArgumentException("Unknown player $playerId.");
         }
 
-        if (($state['players'][$playerId][$field] ?? false) !== true) {
+        if (!self::flag($state['players'][$playerKey][$field] ?? false)) {
             throw new InvalidArgumentException($message);
         }
+    }
+
+    private static function playerKey(array $state, int $playerId): int|string
+    {
+        if (isset($state['players'][$playerId])) {
+            return $playerId;
+        }
+        $stringKey = (string) $playerId;
+        if (isset($state['players'][$stringKey])) {
+            return $stringKey;
+        }
+        throw new InvalidArgumentException("Unknown player $playerId.");
+    }
+
+    private static function flag(mixed $value): bool
+    {
+        return $value === true || $value === 1 || $value === '1';
     }
 }

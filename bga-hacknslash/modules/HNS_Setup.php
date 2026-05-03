@@ -60,11 +60,13 @@ trait HNS_Setup
             $health = (int) $entity['health'];
             $size = $this->hns_sql_escape((string) ($entity['monster_size'] ?? 'small'));
             $onDeath = $this->hns_sql_nullable_string($entity['on_death'] ?? null);
+            $hasShield = !empty($entity['has_shield']) ? 1 : 0;
+            $shieldBroken = !empty($entity['shield_broken']) ? 1 : 0;
             $slot = (int) ($entity['slot'] ?? 0);
             $tileX = (int) ($levelState['tiles'][$entity['tile_id']]['x'] ?? 0);
             $tileY = (int) ($levelState['tiles'][$entity['tile_id']]['y'] ?? 0);
             $tileId = $coordsToTileId["$tileX,$tileY"] ?? $this->tileIdForCoords($tileX, $tileY, $level);
-            $this->DbQuery("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_on_death, entity_slot) VALUES ('monster', $monsterId, $tileId, $health, '$size', $onDeath, $slot)");
+            $this->DbQuery("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_on_death, entity_has_shield, entity_shield_broken, entity_slot) VALUES ('monster', $monsterId, $tileId, $health, '$size', $onDeath, $hasShield, $shieldBroken, $slot)");
         }
     }
 
@@ -85,10 +87,7 @@ trait HNS_Setup
     /** @return array<int, string> */
     protected function drawLevelEnchantments(): array
     {
-        $enchantments = ['shield', 'thorns', null];
-        $draw = $enchantments[array_rand($enchantments)];
-
-        return $draw === null ? [] : [$draw];
+        return [];
     }
 
     protected function tileIdForCoords(int $x, int $y, int $level): int
@@ -98,14 +97,67 @@ trait HNS_Setup
 
     protected function initializePlayers(array $playerIds): void
     {
-        $entryTileId = (int) $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_type = 'entry' ORDER BY tile_id LIMIT 1");
+        $startTileIds = $this->heroStartTileIdsForLevel(HNS_FIRST_LEVEL, count($playerIds));
+        $actionPoints = count($playerIds) <= 1 ? HNS_SOLO_ACTION_POINTS : HNS_MULTIPLAYER_ACTION_POINTS;
 
-        foreach ($playerIds as $playerId) {
+        foreach (array_values($playerIds) as $index => $playerId) {
             $playerId = (int) $playerId;
-            $this->DbQuery('UPDATE player SET player_health = ' . HNS_DEFAULT_HEALTH . ', player_action_points = ' . HNS_DEFAULT_ACTION_POINTS . " WHERE player_id = $playerId");
-            $this->DbQuery("INSERT INTO entity (entity_type, entity_owner, entity_tile_id, entity_health) VALUES ('hero', $playerId, $entryTileId, " . HNS_DEFAULT_HEALTH . ")");
+            $tileId = $startTileIds[$index] ?? $startTileIds[0];
+            $this->DbQuery('UPDATE player SET player_health = ' . HNS_DEFAULT_HEALTH . ", player_action_points = $actionPoints, player_main_action_available = 1 WHERE player_id = $playerId");
+            $this->DbQuery("INSERT INTO entity (entity_type, entity_owner, entity_tile_id, entity_health) VALUES ('hero', $playerId, $tileId, " . HNS_DEFAULT_HEALTH . ")");
+            $this->syncPlayerPositionFromTile($playerId, $tileId);
             $this->initializePlayerPowers($playerId);
         }
+    }
+
+    /** @return list<int> */
+    protected function heroStartTileIdsForLevel(int $level, int $playerCount): array
+    {
+        $entry = $this->getObjectFromDB("SELECT tile_x x, tile_y y FROM tile WHERE tile_type = 'entry' AND tile_level = $level ORDER BY tile_id LIMIT 1");
+        if (!$entry) {
+            return [(int) $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_level = $level ORDER BY tile_id LIMIT 1")];
+        }
+
+        $maxY = (int) $this->getUniqueValueFromDB("SELECT MAX(tile_y) FROM tile WHERE tile_level = $level");
+        $anchorX = (int) $entry['x'];
+        $anchorY = (int) $entry['y'] === 0 ? 1 : $maxY - 1;
+
+        $coords = $playerCount <= 1
+            ? [[$anchorX, $anchorY]]
+            : [[$anchorX - 1, $anchorY], [$anchorX + 1, $anchorY]];
+
+        $tileIds = [];
+        foreach ($coords as [$x, $y]) {
+            $tileId = $this->walkableTileIdForCoords($x, $y, $level);
+            if ($tileId !== null) {
+                $tileIds[] = $tileId;
+            }
+        }
+
+        if ($tileIds === []) {
+            $tileIds[] = $this->walkableTileIdForCoords($anchorX, $anchorY, $level) ?? (int) $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_type = 'entry' AND tile_level = $level ORDER BY tile_id LIMIT 1");
+        }
+
+        return $tileIds;
+    }
+
+    private function walkableTileIdForCoords(int $x, int $y, int $level): ?int
+    {
+        $tileId = $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_x = $x AND tile_y = $y AND tile_level = $level AND tile_type IN ('floor', 'entry', 'exit', 'spikes') LIMIT 1");
+
+        return $tileId === null ? null : (int) $tileId;
+    }
+
+    private function syncPlayerPositionFromTile(int $playerId, int $tileId): void
+    {
+        $tile = $this->getObjectFromDB("SELECT tile_x, tile_y FROM tile WHERE tile_id = $tileId");
+        if (!$tile) {
+            return;
+        }
+
+        $x = (int) $tile['tile_x'];
+        $y = (int) $tile['tile_y'];
+        $this->DbQuery("UPDATE player SET player_position_x = $x, player_position_y = $y WHERE player_id = $playerId");
     }
 
     protected function initializePlayerPowers(int $playerId): void

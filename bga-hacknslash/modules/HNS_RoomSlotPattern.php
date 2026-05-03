@@ -26,11 +26,16 @@ final class HNS_RoomSlotPattern
         }
 
         $slots = [];
-        for ($slot = self::MIN_SLOT; $slot <= $level; $slot++) {
-            $monster = $monsters[$slot - 1];
+        foreach (array_slice($monsters, 0, $level) as $monster) {
+            $slot = self::firstAvailableMonsterSlot($slots, $monster['size'] ?? null);
+            if ($slot === null) {
+                throw new InvalidArgumentException('Not enough valid slots to place monsters.');
+            }
+
             $slots[$slot] = ['type' => 'monster'] + $monster;
         }
 
+        ksort($slots);
         return $slots;
     }
 
@@ -101,5 +106,28 @@ final class HNS_RoomSlotPattern
     private static function isEvenSlot(int $slot): bool
     {
         return $slot % 2 === 0;
+    }
+
+    private static function isValidMonsterSlot(?string $size, int $slot): bool
+    {
+        if ($size === 'large') {
+            return self::isEvenSlot($slot);
+        }
+
+        return $size === 'small' && !self::isEvenSlot($slot);
+    }
+
+    /** @param array<int, array<string, mixed>> $slots */
+    private static function firstAvailableMonsterSlot(array $slots, ?string $size): ?int
+    {
+        for ($slot = self::MIN_SLOT; $slot <= self::MAX_SLOT; $slot++) {
+            if (isset($slots[$slot]) || !self::isValidMonsterSlot($size, $slot)) {
+                continue;
+            }
+
+            return $slot;
+        }
+
+        return null;
     }
 }

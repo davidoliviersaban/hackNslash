@@ -8,7 +8,7 @@ final class PowerMaterialTest extends TestCase
     {
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
 
-        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'vortex'], array_keys($bonus_cards));
+        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'vortex', 'vortex_2'], array_keys($bonus_cards));
     }
 
     public function testAttackPowerDefinition(): void
@@ -81,5 +81,8 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame(1, $vortex['pull_distance']);
         $this->assertSame(2, $vortex['cooldown']);
         $this->assertSame([], $vortex['free_triggers']);
+        $this->assertSame('vortex_2', $vortex['upgrades_to']);
+        $this->assertSame(2, $bonus_cards['vortex_2']['rank']);
+        $this->assertSame(3, $bonus_cards['vortex_2']['targets']);
     }
 }

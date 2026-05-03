@@ -20,9 +20,10 @@ $machinestates = [
         'description' => clienttranslate('${actplayer} must choose an action'),
         'descriptionmyturn' => clienttranslate('${you} must choose an action'),
         'type' => 'activeplayer',
-        'possibleactions' => ['actMove', 'actPlayCard', 'actAttack', 'actEndTurn'],
+        'possibleactions' => ['actMove', 'actPlayCard', 'actAttack', 'actChooseReward', 'actSkipFreeMove', 'actSkipMainAction', 'actEndTurn'],
         'args' => 'argPlayerTurn',
         'transitions' => [
+            'continueTurn' => 10,
             'resolveAction' => 20,
             'endTurn' => 70,
             'roundEnd' => 30,
@@ -85,13 +86,5 @@ $machinestates = [
             'roundEnd' => 30,
             'gameEnd' => 99,
         ],
-    ],
-
-    99 => [
-        'name' => 'gameEnd',
-        'description' => clienttranslate('End of game'),
-        'type' => 'manager',
-        'action' => 'stGameEnd',
-        'args' => 'argGameEnd',
     ],
 ];

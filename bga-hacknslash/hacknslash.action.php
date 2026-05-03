@@ -47,11 +47,35 @@ class action_hacknslash extends APP_GameAction
         self::ajaxResponse();
     }
 
+    public function actChooseReward()
+    {
+        self::setAjaxMode();
+        $mode = self::getArg('mode', AT_alphanum, true);
+        $slot = self::getArg('slot', AT_posint, true);
+        $powerKey = self::getArg('power_key', AT_alphanum, false, '');
+        $this->game->actChooseReward($mode, $slot, $powerKey);
+        self::ajaxResponse();
+    }
+
+    public function actSkipFreeMove()
+    {
+        self::setAjaxMode();
+        $this->game->actSkipFreeMove();
+        self::ajaxResponse();
+    }
+
+    public function actSkipMainAction()
+    {
+        self::setAjaxMode();
+        $this->game->actSkipMainAction();
+        self::ajaxResponse();
+    }
+
     /**
      * Build the optional payload that drives a power resolution.
      *
      * BGA's `getArg` does not natively support arrays, so we accept a
-     * comma-separated list for `target_entity_ids`. Each scalar id stays a
+     * whitespace-separated list for `target_entity_ids`. Each scalar id stays a
      * positive integer; missing fields default to zero so the resolver can
      * apply its own defaults.
      *
@@ -66,7 +90,7 @@ class action_hacknslash extends APP_GameAction
 
         $targetEntityIds = [];
         if ($rawIds !== '') {
-            foreach (explode(',', $rawIds) as $value) {
+            foreach (preg_split('/\s+/', $rawIds) ?: [] as $value) {
                 $value = trim($value);
                 if ($value === '' || !ctype_digit($value)) {
                     continue;

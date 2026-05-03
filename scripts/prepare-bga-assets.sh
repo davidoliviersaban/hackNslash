@@ -25,4 +25,10 @@ if [[ -d "$SRC_DIR/icons" ]]; then
   rsync -a --delete --exclude '.DS_Store' "$SRC_DIR/icons/" "$DST_DIR/tokens/"
 fi
 
+if command -v cwebp >/dev/null 2>&1; then
+  while IFS= read -r -d '' file; do
+    cwebp -quiet -mt -q 90 "$file" -o "${file%.*}.webp"
+  done < <(find "$DST_DIR" -type f \( -iname '*.png' -o -iname '*.jpg' -o -iname '*.jpeg' \) -print0)
+fi
+
 echo "BGA assets prepared in $DST_DIR"

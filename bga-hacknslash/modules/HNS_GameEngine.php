@@ -17,14 +17,15 @@ final class HNS_GameEngine
                 'level_monster_abilities' => [],
                 'tiles' => [],
                 'entities' => [],
-                'monster_slots' => [],
-                'reward_offer' => [],
-            ];
+            'monster_slots' => [],
+            'reward_offer' => [],
+            'reward_upgrades' => [],
+        ];
         }
 
         $layout = HNS_LevelGenerator::generate($levelNumber <= 3 ? 5 : 7, $seed);
         $rng = new HNS_SeededRandom($seed + $levelNumber);
-        $levelMonsterIds = array_slice($rng->shuffle($monsterDeck), 0, $levelNumber);
+        $levelMonsterIds = self::selectMonstersForRoomSlots($rng->shuffle($monsterDeck), $monsterMaterial, $levelNumber);
         $slotPayloads = array_map(static function (int $monsterId) use ($monsterMaterial): array {
             return ['monster_id' => $monsterId, 'size' => ($monsterMaterial[$monsterId]['size'] ?? 'small') === 'big' ? 'large' : 'small'];
         }, $levelMonsterIds);
@@ -35,6 +36,10 @@ final class HNS_GameEngine
         $enchantment = $enchantmentDeck[0] ?? null;
         if ($enchantment === 'shield') {
             $abilities[] = 'shield';
+            foreach ($entities as &$entity) {
+                $entity['has_shield'] = true;
+                $entity['shield_broken'] = false;
+            }
         }
         if ($enchantment === 'thorns') {
             $abilities[] = 'thorns';
@@ -49,7 +54,44 @@ final class HNS_GameEngine
             'monster_slots' => $monsterSlots,
             'level_monster_abilities' => $abilities,
             'reward_offer' => [],
+            'reward_upgrades' => [],
         ];
+    }
+
+    /**
+     * @param array<int, int> $monsterDeck
+     * @param array<int, array<string, mixed>> $monsterMaterial
+     * @return array<int, int>
+     */
+    private static function selectMonstersForRoomSlots(array $monsterDeck, array $monsterMaterial, int $levelNumber): array
+    {
+        $selected = [];
+        $smallCount = 0;
+        $largeCount = 0;
+        $smallCapacity = 4;
+        $largeCapacity = 3;
+
+        foreach ($monsterDeck as $monsterId) {
+            $isLarge = ($monsterMaterial[$monsterId]['size'] ?? 'small') === 'big';
+            if ($isLarge) {
+                if ($largeCount >= $largeCapacity) {
+                    continue;
+                }
+                $largeCount++;
+            } else {
+                if ($smallCount >= $smallCapacity) {
+                    continue;
+                }
+                $smallCount++;
+            }
+
+            $selected[] = $monsterId;
+            if (count($selected) === $levelNumber) {
+                return $selected;
+            }
+        }
+
+        throw new InvalidArgumentException('Not enough monsters to fill valid room slots.');
     }
 
     /**
@@ -60,8 +102,13 @@ final class HNS_GameEngine
     public static function activateMonsters(array $state, array $monsterMaterial): array
     {
         $events = [];
+        $activatedEntities = [];
         foreach (self::monsterActivationOrder($state['entities']) as $entityId) {
             if (($state['entities'][$entityId]['state'] ?? 'active') !== 'active') {
+                continue;
+            }
+
+            if (isset($activatedEntities[$entityId])) {
                 continue;
             }
 
@@ -70,9 +117,69 @@ final class HNS_GameEngine
                 continue;
             }
 
+            $beforeTileId = (int) ($state['entities'][$entityId]['tile_id'] ?? 0);
+            $stackEntityIds = self::stackEntityIds($state['entities'], $state['entities'][$entityId]);
             $result = HNS_MonsterAi::activate($entityId, $state, $monsterMaterial[$monsterId]);
             $state = $result['state'];
-            array_push($events, ...$result['events']);
+            $resultEvents = self::applyStackMovement($entityId, $beforeTileId, $stackEntityIds, $state, $result['events']);
+            $state = $resultEvents['state'];
+            array_push($events, ...$resultEvents['events']);
+            foreach ($stackEntityIds as $stackEntityId) {
+                $activatedEntities[$stackEntityId] = true;
+            }
+        }
+
+        return ['state' => $state, 'events' => $events];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $entities
+     * @param array<string, mixed> $anchorEntity
+     * @return array<int, int>
+     */
+    private static function stackEntityIds(array $entities, array $anchorEntity): array
+    {
+        $ids = [];
+        foreach ($entities as $entityId => $entity) {
+            if (($entity['state'] ?? 'active') !== 'active' || ($entity['type'] ?? null) !== 'monster') {
+                continue;
+            }
+            if ((int) ($entity['tile_id'] ?? 0) === (int) ($anchorEntity['tile_id'] ?? 0)
+                && (int) ($entity['type_arg'] ?? 0) === (int) ($anchorEntity['type_arg'] ?? 0)
+                && ($entity['monster_size'] ?? 'small') === ($anchorEntity['monster_size'] ?? 'small')
+            ) {
+                $ids[] = (int) $entityId;
+            }
+        }
+        sort($ids);
+        return $ids;
+    }
+
+    /**
+     * @param array<int, int> $stackEntityIds
+     * @param array<string, mixed> $state
+     * @param array<int, array<string, mixed>> $events
+     * @return array{state: array<string, mixed>, events: array<int, array<string, mixed>>}
+     */
+    private static function applyStackMovement(int $anchorEntityId, int $beforeTileId, array $stackEntityIds, array $state, array $events): array
+    {
+        $afterTileId = (int) ($state['entities'][$anchorEntityId]['tile_id'] ?? $beforeTileId);
+        if ($afterTileId === $beforeTileId) {
+            return ['state' => $state, 'events' => $events];
+        }
+
+        foreach ($stackEntityIds as $stackEntityId) {
+            if ($stackEntityId !== $anchorEntityId && ($state['entities'][$stackEntityId]['state'] ?? 'active') === 'active') {
+                $state['entities'][$stackEntityId]['tile_id'] = $afterTileId;
+            }
+        }
+
+        foreach ($events as &$event) {
+            if (($event['type'] ?? null) === 'monsterMove' && (int) ($event['source_entity_id'] ?? 0) === $anchorEntityId) {
+                if (count($stackEntityIds) > 1) {
+                    $event['moved_entity_ids'] = $stackEntityIds;
+                }
+            }
         }
 
         return ['state' => $state, 'events' => $events];
@@ -102,7 +209,8 @@ final class HNS_GameEngine
             return $state;
         }
 
-        $state['reward_offer'] = HNS_LevelReward::drawOffer($powers, $powerDeck);
+        $state['reward_offer'] = HNS_LevelReward::drawOfferForPlayer($powers, $powerDeck, array_values($state['player_powers'] ?? []));
+        $state['reward_upgrades'] = HNS_LevelReward::drawUpgradeOfferForPlayer($powers, array_values($state['player_powers'] ?? []));
 
         return $state;
     }

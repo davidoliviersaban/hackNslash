@@ -21,6 +21,86 @@ final class LevelRewardTest extends TestCase
         $this->assertSame(['dash_1', 'vortex'], $offer);
     }
 
+    public function testLevelRewardOfferStartsMissingFamilyAtRankOneOnly(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'vortex'],
+            ['slot' => 2, 'power_key' => 'attack'],
+            ['slot' => 3, 'power_key' => 'attack'],
+        ];
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex', 'vortex_2'], $playerPowers);
+
+        $this->assertSame(['dash_1'], $offer);
+    }
+
+    public function testLevelRewardOfferKeepsStandardNewCardsAndAddsAvailableUpgrades(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'vortex'],
+            ['slot' => 2, 'power_key' => 'attack'],
+            ['slot' => 3, 'power_key' => 'strike'],
+        ];
+
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex', 'vortex_2'], $playerPowers, 3);
+
+        $this->assertSame(['dash_1'], $offer);
+    }
+
+    public function testLevelRewardOfferNeverContainsRankTwoCards(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'dash_1'],
+            ['slot' => 2, 'power_key' => 'vortex'],
+            ['slot' => 3, 'power_key' => 'attack'],
+        ];
+
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex', 'vortex_2'], $playerPowers);
+
+        $this->assertSame([], $offer);
+    }
+
+    public function testLevelRewardOfferDoesNotProposeOwnedFamilyAtRankOne(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'dash_3'],
+            ['slot' => 2, 'power_key' => 'attack'],
+            ['slot' => 3, 'power_key' => 'strike'],
+        ];
+
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex'], $playerPowers);
+
+        $this->assertSame(['vortex'], $offer);
+    }
+
+    public function testLevelRewardUpgradeOfferSkipsRankMaxAndOwnedTargets(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'dash_2'],
+            ['slot' => 2, 'power_key' => 'dash_3'],
+            ['slot' => 3, 'power_key' => 'vortex_2'],
+        ];
+
+        $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, $playerPowers);
+
+        $this->assertSame([], $upgrades);
+    }
+
+    public function testLevelRewardUpgradeOfferIsSeparateFromRankOneOffer(): void
+    {
+        $playerPowers = [
+            ['slot' => 1, 'power_key' => 'dash_1'],
+            ['slot' => 2, 'power_key' => 'vortex'],
+            ['slot' => 3, 'power_key' => 'attack'],
+        ];
+
+        $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, $playerPowers);
+
+        $this->assertSame([
+            ['slot' => 1, 'from' => 'dash_1', 'to' => 'dash_2'],
+            ['slot' => 2, 'from' => 'vortex', 'to' => 'vortex_2'],
+        ], $upgrades);
+    }
+
     public function testPlayerCanTakeOfferedPowerIntoChosenSlot(): void
     {
         $playerPowers = [

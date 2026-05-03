@@ -1,7 +1,7 @@
 require 'squib'
 
 #deck = Squib.csv file: 'src/resources/land_cards.csv'
-deck = ['floor1.png', 'floor2.png', 'floor3.png']
+deck = ['floor1.webp', 'floor2.webp', 'floor3.webp']
 floor_size = '202mm'
 date = DateTime.now.to_s
 

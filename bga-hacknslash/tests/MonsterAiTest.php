@@ -39,7 +39,7 @@ final class MonsterAiTest extends TestCase
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
         $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
-        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1]], $result['events']);
+        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
     public function testMonsterMovesTowardClosestHeroWhenItCannotAttack(): void
@@ -48,6 +48,31 @@ final class MonsterAiTest extends TestCase
 
         $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
         $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2]], $result['events']);
+    }
+
+    public function testGoblinDoesNotAttackDiagonally(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 1, 'y' => 1, 'type' => 'floor'];
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20]['tile_id'] = 6;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[1]);
+
+        $this->assertSame(10, $result['state']['entities'][10]['health']);
+        $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2]], $result['events']);
+    }
+
+    public function testGoblinDoesNotAttackOnItsOwnTile(): void
+    {
+        $state = $this->state;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20]['tile_id'] = 1;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[1]);
+
+        $this->assertSame(10, $result['state']['entities'][10]['health']);
+        $this->assertSame([], $result['events']);
     }
 
     public function testMonsterThatCannotMoveOnlyAttacksIfAlreadyInRange(): void
@@ -64,13 +89,16 @@ final class MonsterAiTest extends TestCase
 
     public function testMonsterThatCanMoveAndAttackDoesBothInActivation(): void
     {
-        $result = HNS_MonsterAi::activate(20, $this->state, $this->monsters[11]);
+        $monster = $this->monsters[1];
+        $monster['can_attack_and_move'] = true;
+
+        $result = HNS_MonsterAi::activate(20, $this->state, $monster);
 
         $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
         $this->assertSame(9, $result['state']['entities'][10]['health']);
         $this->assertSame([
             ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2],
-            ['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
+            ['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9],
         ], $result['events']);
     }
 
@@ -118,7 +146,7 @@ final class MonsterAiTest extends TestCase
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
         $this->assertSame(7, $result['state']['entities'][20]['tile_id']);
-        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1]], $result['events']);
+        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
     public function testKamikazeExplodesWhenOrthogonalToHero(): void
@@ -149,17 +177,19 @@ final class MonsterAiTest extends TestCase
         $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 6]], $result['events']);
     }
 
-    public function testWizardAttacksOrthogonallyAtRangeFour(): void
+    public function testWizardAttacksAtChebyshevRangeFour(): void
     {
         $state = $this->state;
-        $state['entities'][10]['tile_id'] = 4;
+        $state['tiles'][6] = ['id' => 6, 'x' => 4, 'y' => 4, 'type' => 'floor'];
+        $state['tiles'][7] = ['id' => 7, 'x' => 1, 'y' => 1, 'type' => 'floor'];
+        $state['entities'][10]['tile_id'] = 6;
         $state['entities'][11]['state'] = 'dead';
-        $state['entities'][20]['tile_id'] = 1;
+        $state['entities'][20]['tile_id'] = 7;
 
         $result = HNS_MonsterAi::activate(20, $state, $this->monsters[5]);
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
-        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1]], $result['events']);
+        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
     public function testWizardDoesNotAttackAtRangeZero(): void
@@ -172,8 +202,35 @@ final class MonsterAiTest extends TestCase
         $result = HNS_MonsterAi::activate(20, $state, $this->monsters[5]);
 
         $this->assertSame(10, $result['state']['entities'][10]['health']);
+        $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2]], $result['events']);
+    }
+
+    public function testWizardDoesNotAttackAtMeleeRange(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 2, 'y' => 1, 'type' => 'floor'];
+        $state['entities'][20]['tile_id'] = 2;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[5]);
+
+        $this->assertSame(10, $result['state']['entities'][10]['health']);
         $this->assertSame(3, $result['state']['entities'][20]['tile_id']);
-        $this->assertSame([], $result['events']);
+        $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 3]], $result['events']);
+    }
+
+    public function testWizardStaysInRangeAndAttacksInsteadOfMovingCloser(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 4, 'y' => 0, 'type' => 'floor'];
+        $state['entities'][10]['tile_id'] = 1;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20]['tile_id'] = 6;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[5]);
+
+        $this->assertSame(6, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
     public function testWizardMovesOrthogonallyOneTileWhenItCannotAttack(): void
@@ -191,29 +248,31 @@ final class MonsterAiTest extends TestCase
         $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 7]], $result['events']);
     }
 
-    public function testBomberAttacksOrthogonallyAtRangeThree(): void
+    public function testBomberAttacksAtChebyshevRangeThree(): void
     {
         $state = $this->state;
-        $state['entities'][10]['tile_id'] = 4;
+        $state['tiles'][6] = ['id' => 6, 'x' => 3, 'y' => 3, 'type' => 'floor'];
+        $state['entities'][10]['tile_id'] = 6;
         $state['entities'][11]['state'] = 'dead';
         $state['entities'][20]['tile_id'] = 1;
 
         $result = HNS_MonsterAi::activate(20, $state, $this->monsters[6]);
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
-        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1]], $result['events']);
+        $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
-    public function testBomberDoesNotAttackAtOrthogonalRangeOneAndMovesInstead(): void
+    public function testBomberDoesNotAttackAtMeleeRange(): void
     {
         $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 2, 'y' => 1, 'type' => 'floor'];
         $state['entities'][20]['tile_id'] = 2;
 
         $result = HNS_MonsterAi::activate(20, $state, $this->monsters[6]);
 
         $this->assertSame(10, $result['state']['entities'][10]['health']);
-        $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
-        $this->assertSame([], $result['events']);
+        $this->assertSame(3, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 3]], $result['events']);
     }
 
     public function testOrcHitsThreeFrontTilesForTwoDamage(): void
@@ -290,8 +349,42 @@ final class MonsterAiTest extends TestCase
         $this->assertSame(1, $result['state']['entities'][21]['type_arg']);
         $this->assertSame(4, $result['state']['entities'][20]['tile_id']);
         $this->assertSame([
-            ['type' => 'monsterSummon', 'source_entity_id' => 20, 'summoned_entity_id' => 21, 'monster_id' => 1, 'target_tile_id' => 2],
+            ['type' => 'monsterSummon', 'source_entity_id' => 20, 'summoned_entity_id' => 21, 'monster_id' => 1, 'target_tile_id' => 2, 'summoned_entity' => $result['state']['entities'][21]],
             ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 4],
+        ], $result['events']);
+    }
+
+    public function testWolfRiderDoesNotFleeIfNoAdjacentTileIncreasesDistance(): void
+    {
+        $state = $this->state;
+        $state['entities'][10]['tile_id'] = 2;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20] = ['id' => 20, 'type' => 'monster', 'type_arg' => 9, 'monster_size' => 'big', 'tile_id' => 1, 'health' => 3, 'state' => 'active'];
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[9]);
+
+        $this->assertSame(1, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([
+            ['type' => 'monsterSummon', 'source_entity_id' => 20, 'summoned_entity_id' => 21, 'monster_id' => 1, 'target_tile_id' => 5, 'summoned_entity' => $result['state']['entities'][21]],
+        ], $result['events']);
+    }
+
+    public function testWolfRiderDoesNotFleeOntoOccupiedTile(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 2, 'y' => 1, 'type' => 'floor'];
+        $state['entities'][10]['tile_id'] = 1;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20] = ['id' => 20, 'type' => 'monster', 'type_arg' => 9, 'monster_size' => 'big', 'tile_id' => 3, 'health' => 3, 'state' => 'active'];
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 1, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 1, 'state' => 'active'];
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[9]);
+
+        $this->assertSame(6, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([
+            ['type' => 'monsterSummon', 'source_entity_id' => 20, 'summoned_entity_id' => 32, 'monster_id' => 1, 'target_tile_id' => 2, 'summoned_entity' => $result['state']['entities'][32]],
+            ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 6],
         ], $result['events']);
     }
 }

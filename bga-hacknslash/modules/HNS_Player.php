@@ -23,12 +23,50 @@ trait HNS_Player
     {
         $round = (int) $this->getGameStateValue('round_number') + 1;
         $this->setGameStateValue('round_number', $round);
-        $this->DbQuery('UPDATE player SET player_free_move_available = 1, player_main_action_available = 1, player_action_points = ' . HNS_DEFAULT_ACTION_POINTS);
+        $this->clearFreeActionChain();
+        $actionPoints = $this->mainActionPointsPerPlayer();
+        $mainActionAvailable = $actionPoints > 0 ? 1 : 0;
+        $this->DbQuery("UPDATE player SET player_free_move_available = 1, player_main_action_available = $mainActionAvailable, player_action_points = $actionPoints");
+        $this->notifyAllPlayers('roundStarted', '', [
+            'players' => $this->getPlayersWithState(),
+            'entities' => $this->getEntities(),
+            'free_action_events' => [],
+        ]);
     }
 
     protected function areAllHeroActionsSpent(): bool
     {
         return (int) $this->getUniqueValueFromDB('SELECT COUNT(*) FROM player WHERE player_free_move_available = 1 OR player_main_action_available = 1') === 0;
+    }
+
+    protected function isActivePlayerTurnSpent(): bool
+    {
+        $playerId = (int) $this->getActivePlayerId();
+        return (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM player WHERE player_id = $playerId AND (player_free_move_available = 1 OR player_main_action_available = 1)") === 0;
+    }
+
+    protected function isActivePlayerFreeMoveAvailable(): bool
+    {
+        $playerId = (int) $this->getActivePlayerId();
+        return (int) $this->getUniqueValueFromDB("SELECT player_free_move_available FROM player WHERE player_id = $playerId") === 1;
+    }
+
+    protected function isActivePlayerMainActionAvailable(): bool
+    {
+        $playerId = (int) $this->getActivePlayerId();
+        return (int) $this->getUniqueValueFromDB("SELECT player_action_points FROM player WHERE player_id = $playerId") > 0;
+    }
+
+    protected function isActivePlayerMoveAvailable(): bool
+    {
+        $playerId = (int) $this->getActivePlayerId();
+        return (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM player WHERE player_id = $playerId AND (player_free_move_available = 1 OR player_action_points > 0)") === 1;
+    }
+
+    protected function mainActionPointsPerPlayer(): int
+    {
+        $playerCount = (int) $this->getUniqueValueFromDB('SELECT COUNT(*) FROM player');
+        return $playerCount <= 1 ? HNS_SOLO_ACTION_POINTS : HNS_MULTIPLAYER_ACTION_POINTS;
     }
 
     protected function getPlayerPowers(): array

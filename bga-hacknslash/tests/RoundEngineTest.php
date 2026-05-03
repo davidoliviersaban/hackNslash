@@ -34,11 +34,166 @@ final class RoundEngineTest extends TestCase
         $this->assertTrue($state['players'][1]['main_action_available']);
     }
 
+    public function testSoloStartsWithTwoMainActionPoints(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0]]];
+
+        $state = HNS_RoundEngine::startRound($state);
+
+        $this->assertSame(2, $state['players'][1]['action_points']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testMultiplayerStartsWithOneMainActionPointPerPlayer(): void
+    {
+        $state = [
+            'players' => [
+                1 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0],
+                2 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::startRound($state);
+
+        $this->assertSame(1, $state['players'][1]['action_points']);
+        $this->assertSame(1, $state['players'][2]['action_points']);
+    }
+
+    public function testSoloMainActionConsumesOnlyOneActionPoint(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]]];
+
+        $state = HNS_RoundEngine::consumeMainAction($state, 1);
+
+        $this->assertSame(1, $state['players'][1]['action_points']);
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+        $this->assertFalse(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testFreeMainActionDoesNotConsumeActionPoint(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 1]]];
+
+        $state = HNS_RoundEngine::consumeMainAction($state, 1, true);
+
+        $this->assertSame(1, $state['players'][1]['action_points']);
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testPaidMoveConsumesActionPointAfterFreeMoveIsClosed(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => false, 'main_action_available' => true, 'action_points' => 2]]];
+
+        $state = HNS_RoundEngine::consumeMove($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertSame(1, $state['players'][1]['action_points']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testFreeMoveDoesNotConsumeActionPointBeforeAnyAction(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]]];
+
+        $state = HNS_RoundEngine::consumeMove($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertSame(2, $state['players'][1]['action_points']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testDbIntegerFreeMoveFlagIsConsumedAsFreeMove(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => '1', 'main_action_available' => '0', 'action_points' => 0]]];
+
+        $state = HNS_RoundEngine::consumeMove($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertSame(0, $state['players'][1]['action_points']);
+        $this->assertFalse($state['players'][1]['main_action_available']);
+    }
+
     public function testHeroPhaseCompletesWhenAllActionsAreSpent(): void
     {
         $state = ['players' => [1 => ['free_move_available' => false, 'main_action_available' => false], 2 => ['free_move_available' => false, 'main_action_available' => false]]];
 
         $this->assertTrue(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testSkippingFreeMoveLeavesMainActionAvailable(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true]]];
+
+        $state = HNS_RoundEngine::consumeFreeMove($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertTrue($state['players'][1]['main_action_available']);
+        $this->assertFalse(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testSkippingMainActionClosesFreeMove(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 1]]];
+
+        $state = HNS_RoundEngine::consumeMainAction($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertFalse($state['players'][1]['main_action_available']);
+        $this->assertTrue(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testConsumingBothOptionalActionsCompletesHeroPhase(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true]]];
+
+        $state = HNS_RoundEngine::consumeFreeMove($state, 1);
+        $state = HNS_RoundEngine::consumeMainAction($state, 1);
+
+        $this->assertTrue(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testEndingSoloTurnConsumesAllHeroActionsAndCompletesHeroPhase(): void
+    {
+        $state = ['players' => [1 => ['free_move_available' => true, 'main_action_available' => true]]];
+
+        $state = HNS_RoundEngine::endPlayerTurn($state, 1);
+
+        $this->assertFalse($state['players'][1]['free_move_available']);
+        $this->assertFalse($state['players'][1]['main_action_available']);
+        $this->assertTrue(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testSkippingInactivePartnerConsumesTheirActionsAndCompletesHeroPhase(): void
+    {
+        $state = [
+            'players' => [
+                1 => ['free_move_available' => false, 'main_action_available' => false],
+                2 => ['free_move_available' => true, 'main_action_available' => true],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::endPlayerTurn($state, 2);
+
+        $this->assertFalse($state['players'][2]['free_move_available']);
+        $this->assertFalse($state['players'][2]['main_action_available']);
+        $this->assertTrue(HNS_RoundEngine::isHeroPhaseComplete($state));
+    }
+
+    public function testFindsNextPlayerWithActionsRemaining(): void
+    {
+        $state = [
+            'players' => [
+                1 => ['free_move_available' => false, 'main_action_available' => false],
+                2 => ['free_move_available' => true, 'main_action_available' => false],
+                3 => ['free_move_available' => false, 'main_action_available' => true],
+            ],
+        ];
+
+        $this->assertSame(2, HNS_RoundEngine::nextPlayerWithActions($state, 1));
+        $this->assertSame(3, HNS_RoundEngine::nextPlayerWithActions($state, 2));
+        $this->assertSame(2, HNS_RoundEngine::nextPlayerWithActions($state, 3));
     }
 
     public function testCooldownStepTicksPowersDown(): void
@@ -92,6 +247,7 @@ final class RoundEngineTest extends TestCase
 
         $this->assertSame(2, $result['state']['level']);
         $this->assertSame('levelCleared', $result['events'][0]['type']);
+        $this->assertArrayHasKey('reward_upgrades', $result['events'][0]);
         $this->assertSame('levelStarted', $result['events'][1]['type']);
         $this->assertTrue($result['state']['players'][1]['free_move_available']);
     }

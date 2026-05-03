@@ -9,7 +9,13 @@ trait HNS_Board
 
     protected function getEntities(): array
     {
-        return $this->getCollectionFromDb('SELECT entity_id id, entity_type type, entity_type_arg type_arg, entity_owner owner, entity_tile_id tile_id, entity_health health, entity_state state, entity_monster_size monster_size, entity_boss_key boss_key, entity_phase phase, entity_status status, entity_on_death on_death, entity_shield_broken shield_broken, entity_slot slot FROM entity');
+        return $this->getEntitiesForLevel((int) $this->getGameStateValue('current_level'));
+    }
+
+    protected function getEntitiesForLevel(int $level): array
+    {
+        $this->ensureEntityRuntimeColumns();
+        return $this->getCollectionFromDb("SELECT e.entity_id id, e.entity_type type, e.entity_type_arg type_arg, e.entity_owner owner, e.entity_tile_id tile_id, e.entity_health health, e.entity_state state, e.entity_monster_size monster_size, e.entity_boss_key boss_key, e.entity_phase phase, e.entity_status status, e.entity_on_death on_death, e.entity_has_shield has_shield, e.entity_shield_broken shield_broken, e.entity_slot slot FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE t.tile_level = $level");
     }
 
     protected function moveHeroToTile(int $playerId, int $tileId): void
@@ -52,6 +58,7 @@ trait HNS_Board
 
     protected function persistEngineState(array $state): void
     {
+        $this->ensureEntityRuntimeColumns();
         $entities = $state['entities'] ?? [];
         if (empty($entities)) {
             return;
@@ -70,10 +77,12 @@ trait HNS_Board
             $health = (int) ($entity['health'] ?? 0);
             $entityState = $this->hns_sql_escape((string) ($entity['state'] ?? 'active'));
             $status = $this->hns_sql_nullable_string($entity['status'] ?? null);
+            $hasShield = !empty($entity['has_shield']) ? 1 : 0;
             $shieldBroken = !empty($entity['shield_broken']) ? 1 : 0;
 
             if (isset($existingIds[$id])) {
-                $this->DbQuery("UPDATE entity SET entity_tile_id = $tileId, entity_health = $health, entity_state = '$entityState', entity_status = $status, entity_shield_broken = $shieldBroken WHERE entity_id = $id");
+                $this->DbQuery("UPDATE entity SET entity_tile_id = $tileId, entity_health = $health, entity_state = '$entityState', entity_status = $status, entity_has_shield = $hasShield, entity_shield_broken = $shieldBroken WHERE entity_id = $id");
+                $this->syncHeroPlayerHealth($entity, $health);
                 continue;
             }
 
@@ -85,8 +94,35 @@ trait HNS_Board
             $slot = isset($entity['slot']) ? (int) $entity['slot'] : 'NULL';
             $bossKey = $this->hns_sql_nullable_string($entity['boss_key'] ?? null);
             $phase = (int) ($entity['phase'] ?? 0);
-            $this->DbQuery("INSERT INTO entity (entity_id, entity_type, entity_type_arg, entity_owner, entity_tile_id, entity_health, entity_state, entity_monster_size, entity_boss_key, entity_phase, entity_status, entity_on_death, entity_shield_broken, entity_slot) VALUES ($id, '$type', $typeArg, $owner, $tileId, $health, '$entityState', $size, $bossKey, $phase, $status, $onDeath, $shieldBroken, $slot)");
+            $this->DbQuery("INSERT INTO entity (entity_id, entity_type, entity_type_arg, entity_owner, entity_tile_id, entity_health, entity_state, entity_monster_size, entity_boss_key, entity_phase, entity_status, entity_on_death, entity_has_shield, entity_shield_broken, entity_slot) VALUES ($id, '$type', $typeArg, $owner, $tileId, $health, '$entityState', $size, $bossKey, $phase, $status, $onDeath, $hasShield, $shieldBroken, $slot)");
+            $this->syncHeroPlayerHealth($entity, $health);
         }
+    }
+
+    /** @param array<string, mixed> $entity */
+    private function syncHeroPlayerHealth(array $entity, int $health): void
+    {
+        if (($entity['type'] ?? null) !== 'hero' || !isset($entity['owner'])) {
+            return;
+        }
+
+        $playerId = (int) $entity['owner'];
+        $this->DbQuery("UPDATE player SET player_health = $health WHERE player_id = $playerId");
+    }
+
+    private function ensureEntityRuntimeColumns(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $hasShieldColumn = $this->getObjectFromDB("SHOW COLUMNS FROM entity LIKE 'entity_has_shield'");
+        if (!$hasShieldColumn) {
+            $this->DbQuery("ALTER TABLE entity ADD entity_has_shield TINYINT UNSIGNED NOT NULL DEFAULT '0' AFTER entity_on_death");
+        }
+
+        $done = true;
     }
 
     /**
@@ -109,9 +145,22 @@ trait HNS_Board
         return $existing;
     }
 
-    protected function moveHeroesToCurrentLevelEntry(int $level): void
+    protected function moveHeroesToLevelStarts(int $level): void
     {
-        $entryTileId = (int) $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_type = 'entry' AND tile_level = $level ORDER BY tile_id LIMIT 1");
-        $this->DbQuery("UPDATE entity SET entity_tile_id = $entryTileId WHERE entity_type = 'hero'");
+        $heroes = $this->getCollectionFromDb("SELECT entity_id id, entity_owner owner FROM entity WHERE entity_type = 'hero' ORDER BY entity_id");
+        $startTileIds = $this->heroStartTileIdsForLevel($level, count($heroes));
+
+        foreach (array_values($heroes) as $index => $hero) {
+            $entityId = (int) $hero['id'];
+            $playerId = (int) $hero['owner'];
+            $tileId = $startTileIds[$index] ?? $startTileIds[0];
+            $this->DbQuery("UPDATE entity SET entity_tile_id = $tileId WHERE entity_id = $entityId");
+            $this->syncPlayerPositionFromTile($playerId, $tileId);
+        }
+    }
+
+    protected function deleteMonstersOutsideLevel(int $level): void
+    {
+        $this->DbQuery("DELETE e FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_type IN ('monster', 'boss') AND t.tile_level <> $level");
     }
 }

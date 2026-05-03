@@ -8,7 +8,12 @@ final class DbModelTest extends TestCase
 
     protected function setUp(): void
     {
-        $this->sql = file_get_contents(dirname(__DIR__) . '/dbmodel.sql');
+        $contents = '';
+        $file = new SplFileObject(dirname(__DIR__) . '/dbmodel.sql');
+        while (!$file->eof()) {
+            $contents .= $file->fgets();
+        }
+        $this->sql = $contents;
     }
 
     public function testPlayerStoresRoundActionFlags(): void
@@ -42,6 +47,7 @@ final class DbModelTest extends TestCase
         $this->assertStringContainsString('`entity_phase` TINYINT UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
         $this->assertStringContainsString('`entity_status` VARCHAR(32) DEFAULT NULL', $this->sql);
         $this->assertStringContainsString('`entity_on_death` VARCHAR(32) DEFAULT NULL', $this->sql);
+        $this->assertStringContainsString('`entity_has_shield` TINYINT UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
         $this->assertStringContainsString('`entity_shield_broken` TINYINT UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
         $this->assertStringContainsString('`entity_slot` TINYINT UNSIGNED DEFAULT NULL', $this->sql);
     }

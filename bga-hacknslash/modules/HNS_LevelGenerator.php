@@ -278,7 +278,12 @@ final class HNS_LevelGenerator
 
 final class HNS_SeededRandom
 {
-    public function __construct(private int $state) {}
+    private int $state;
+
+    public function __construct(int $state)
+    {
+        $this->state = $state & 0x7fffffff;
+    }
 
     /** @param array<int, mixed> $items */
     public function pick(array $items): mixed

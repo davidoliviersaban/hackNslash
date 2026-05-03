@@ -31,6 +31,18 @@ final class RoomSlotPatternTest extends TestCase
         $this->assertSame(2, $slots[3]['monster_id']);
     }
 
+    public function testSmallMonstersSkipEvenSlots(): void
+    {
+        $slots = HNS_RoomSlotPattern::assignLevelMonsterSlots(2, [
+            ['monster_id' => 1, 'size' => 'small'],
+            ['monster_id' => 3, 'size' => 'small'],
+        ]);
+
+        $this->assertSame([1, 3], array_keys($slots));
+        $this->assertSame(1, $slots[1]['monster_id']);
+        $this->assertSame(3, $slots[3]['monster_id']);
+    }
+
     public function testLevelSlotAssignmentRequiresEnoughMonsters(): void
     {
         $this->expectException(InvalidArgumentException::class);

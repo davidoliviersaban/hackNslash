@@ -43,18 +43,90 @@ EXCLUDES=(
   ".git"
   ".DS_Store"
   "vendor"
+  "vendor/**"
+  "vendors"
+  "vendors/**"
   ".phpunit.result.cache"
   ".*"
+  "tests"
+  "composer.json"
+  "composer.lock"
+  "phpunit.xml"
+  "AGENTS.md"
+  "README.md"
+  "readme.md"
+  "docs"
 )
+
+BGAIGNORE_FILE="$LOCAL_PATH/.bgaignore"
+if [[ -f "$BGAIGNORE_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line%%#*}"
+    line="${line%$'\r'}"
+    line="${line#${line%%[![:space:]]*}}"
+    line="${line%${line##*[![:space:]]}}"
+    [[ -z "$line" ]] && continue
+
+    EXCLUDES+=("$line")
+    if [[ "$line" == */ ]]; then
+      EXCLUDES+=("${line%/}" "${line%/}/**")
+    fi
+  done < "$BGAIGNORE_FILE"
+fi
 
 excludeFlags=()
 for e in "${EXCLUDES[@]}"; do
   excludeFlags+=("--exclude-glob" "$e")
 done
 
+# lftp mirror --delete does not remove paths that are excluded from the mirror.
+# Clean known non-BGA development artifacts explicitly before uploading.
+REMOTE_CLEANUP_PATHS=(
+  "vendor"
+  "vendors"
+  "tests"
+  "docs"
+  "composer.json"
+  "composer.lock"
+  "phpunit.xml"
+  "AGENTS.md"
+  "README.md"
+  "readme.md"
+  ".phpunit.result.cache"
+)
+
+remoteCleanupCommands=""
+
 DRY_RUN_FLAG=""
-if [[ "${1:-}" == "--dry-run" ]]; then
-  DRY_RUN_FLAG="--dry-run"
+CLEAN_REMOTE=false
+for arg in "$@"; do
+  case "$arg" in
+    --dry-run)
+      DRY_RUN_FLAG="--dry-run"
+      ;;
+    --clean-remote)
+      CLEAN_REMOTE=true
+      ;;
+    *)
+      echo "Unknown option: $arg" >&2
+      echo "Usage: $0 [--dry-run] [--clean-remote]" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ -z "$DRY_RUN_FLAG" ]]; then
+  echo "Performing actual deployment."
+  if [[ "$CLEAN_REMOTE" == true ]]; then
+    echo "Cleaning remote development artifacts."
+    for path in "${REMOTE_CLEANUP_PATHS[@]}"; do
+      remoteCleanupCommands+="rm -rf $path"$'\n'
+    done
+  fi
+  #  sudo route -n add -host  37.187.205.147 192.168.1.1
+  # ps aux | awk 'tolower($0) ~ /globalprotect|pangp|palo|gpsplit|firewall|socketfilter|crowdstrike|falcon/ && $0 !~ /awk/ {print $2}' | xargs kill -9 || echo "ok"
+elif [[ "$CLEAN_REMOTE" == true ]]; then
+  echo "Skipping remote cleanup during dry-run."
 fi
 
 echo "Deploying bga-hacknslash to $BGA_SFTP_USER@$BGA_SFTP_HOST:$BGA_SFTP_REMOTE_DIR"
@@ -66,6 +138,7 @@ set sftp:auto-confirm yes
 set cmd:fail-exit yes
 lcd "$LOCAL_PATH"
 cd "$BGA_SFTP_REMOTE_DIR"
+$remoteCleanupCommands
 mirror -R --parallel=4 --delete $DRY_RUN_FLAG ${excludeFlags[@]}
 bye
 EOF

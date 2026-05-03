@@ -3,8 +3,6 @@
  * Main BGA server-side class for HackNSlash.
  */
 
-require_once(APP_GAMEMODULE_PATH . 'module/table/table.game.php');
-
 require_once(__DIR__ . '/modules/HNS_DbHelpers.php');
 require_once(__DIR__ . '/modules/HNS_EventDispatcher.php');
 require_once(__DIR__ . '/modules/HNS_Setup.php');
@@ -21,7 +19,7 @@ require_once(__DIR__ . '/modules/HNS_PowerResolver.php');
 require_once(__DIR__ . '/modules/HNS_FreeActionEngine.php');
 require_once(__DIR__ . '/modules/HNS_BoardRules.php');
 
-class Hacknslash extends Table
+class Hacknslash extends \Bga\GameFramework\Table
 {
     use HNS_DbHelpers;
     use HNS_EventDispatcher;
@@ -35,8 +33,7 @@ class Hacknslash extends Table
 
         include_once(__DIR__ . '/material.inc.php');
 
-        $this->cards = $this->deckFactory->createDeck('card');
-        $this->cards->init('card');
+        $this->cards = $this->bga->deckFactory->createDeck('card');
 
         $this->initGameStateLabels([
             'current_level' => 10,
@@ -58,11 +55,16 @@ class Hacknslash extends Table
             $canal = $this->hns_sql_escape((string) $player['player_canal']);
             $name = $this->hns_sql_escape((string) $player['player_name']);
             $avatar = $this->hns_sql_escape((string) $player['player_avatar']);
-            $values[] = "($playerIdInt,'$color','$canal','$name','$avatar',0)";
+            $values[] = "($playerIdInt,'$color','$canal','$name','$avatar')";
         }
 
-        $this->DbQuery('INSERT INTO player (player_id, player_color, player_canal, player_name, player_avatar, player_score) VALUES ' . implode(',', $values));
+        $this->DbQuery('INSERT INTO player (player_id, player_color, player_canal, player_name, player_avatar) VALUES ' . implode(',', $values));
         $this->reloadPlayersBasicInfos();
+
+        // Initialize scores using the framework counter (player_score column).
+        foreach ($players as $playerId => $player) {
+            $this->bga->playerScore->set((int) $playerId, 0);
+        }
 
         $this->setGameStateInitialValue('current_level', HNS_FIRST_LEVEL);
         $this->setGameStateInitialValue('selected_tile', 0);
@@ -73,7 +75,7 @@ class Hacknslash extends Table
         $this->setupInitialBoard(HNS_FIRST_LEVEL);
         $this->initializePlayers(array_keys($players));
 
-        $this->activeNextPlayer();
+        $this->gamestate->changeActivePlayer((int) array_key_first($players));
 
         return 10;
     }
@@ -91,7 +93,10 @@ class Hacknslash extends Table
             'monsters' => $this->monsters,
             'bonus_cards' => $this->bonus_cards,
             'player_powers' => $this->getPlayerPowers(),
+            'free_action_events' => $this->getFreeActionEventTypes(),
             'level_monster_abilities' => $this->getLevelMonsterAbilities(),
+            'reward_offer' => $this->getCurrentRewardOffer(),
+            'reward_upgrades' => $this->getCurrentRewardUpgrades(),
         ];
     }
 
@@ -115,12 +120,9 @@ class Hacknslash extends Table
         return [
             'action_points' => $this->getActivePlayerActionPoints(),
             'selected_tile' => (int) $this->getGameStateValue('selected_tile'),
+            'free_move_available' => $this->isActivePlayerFreeMoveAvailable(),
+            'main_action_available' => $this->isActivePlayerMainActionAvailable(),
         ];
-    }
-
-    public function argGameEnd(): array
-    {
-        return [];
     }
 
     public function stGameSetup(): void
@@ -138,7 +140,12 @@ class Hacknslash extends Table
 
     public function stCooldown(): void
     {
+        $this->clearFreeActionChain();
         $this->DbQuery('UPDATE player_power SET power_cooldown = power_cooldown - 1 WHERE power_cooldown > 0');
+        $this->notifyAllPlayers('powerCooldownsUpdated', '', [
+            'player_powers' => $this->getPlayerPowers(),
+            'free_action_events' => [],
+        ]);
         $this->gamestate->nextState('activateTraps');
     }
 
@@ -180,7 +187,13 @@ class Hacknslash extends Table
         }
 
         $level = (int) $this->getGameStateValue('current_level');
-        $this->notifyEngineEvents([['type' => 'levelCleared', 'level' => $level]]);
+        $playerId = (int) $this->getActivePlayerId();
+        $playerPowers = array_values($this->getCollectionFromDb("SELECT power_slot slot, power_key FROM player_power WHERE player_id = $playerId ORDER BY power_slot"));
+        $rewardOffer = HNS_LevelReward::drawOfferForPlayer($this->bonus_cards, array_keys($this->bonus_cards), $playerPowers);
+        $rewardUpgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->bonus_cards, $playerPowers);
+        $this->saveCurrentRewardOffer($rewardOffer);
+        $this->saveCurrentRewardUpgrades($rewardUpgrades);
+        $this->notifyEngineEvents([['type' => 'levelCleared', 'level' => $level, 'reward_offer' => $rewardOffer, 'reward_upgrades' => $rewardUpgrades]]);
 
         if ($level >= HNS_BOSS_LEVEL) {
             $this->notifyEngineEvents([['type' => 'gameWon']]);
@@ -190,39 +203,69 @@ class Hacknslash extends Table
 
         $this->setGameStateValue('current_level', $level + 1);
         $this->setupInitialBoard($level + 1);
-        $this->moveHeroesToCurrentLevelEntry($level + 1);
+        $this->moveHeroesToLevelStarts($level + 1);
+        $this->deleteMonstersOutsideLevel($level + 1);
         $this->resetRoundFlags();
-        $this->notifyEngineEvents([['type' => 'levelStarted', 'level' => $level + 1, 'is_boss_level' => ($level + 1) >= HNS_BOSS_LEVEL]]);
+        $this->notifyEngineEvents([[
+            'type' => 'levelStarted',
+            'level' => $level + 1,
+            'is_boss_level' => ($level + 1) >= HNS_BOSS_LEVEL,
+            'tiles' => $this->getTilesForLevel($level + 1),
+            'entities' => $this->getEntities(),
+            'players' => $this->getPlayersWithState(),
+            'level_monster_abilities' => $this->getLevelMonsterAbilities(),
+        ]]);
         $this->gamestate->nextState('nextLevel');
     }
 
     public function stNextPlayer(): void
     {
-        if ($this->areAllHeroActionsSpent()) {
+        $state = $this->loadEngineState();
+        $nextPlayerId = HNS_RoundEngine::nextPlayerWithActions($state, (int) $this->getActivePlayerId());
+        if ($nextPlayerId === null) {
             $this->gamestate->nextState('roundEnd');
             return;
         }
 
-        $this->activeNextPlayer();
+        $this->gamestate->changeActivePlayer($nextPlayerId);
         $this->gamestate->nextState('nextTurn');
     }
 
     public function actMove(int $tile_id): void
     {
         $this->checkAction('actMove');
+        if (!$this->isActivePlayerMoveAvailable()) {
+            throw new BgaUserException(clienttranslate('Move is not available.'));
+        }
 
         $playerId = (int) $this->getActivePlayerId();
         $tileId = (int) $tile_id;
+        $entityId = $this->getHeroEntityIdForPlayer($playerId);
+        $this->assertFreeMoveTarget($entityId, $tileId);
         $this->moveHeroToTile($playerId, $tileId);
-        $this->DbQuery("UPDATE player SET player_free_move_available = 0 WHERE player_id = $playerId");
+        try {
+            $state = HNS_RoundEngine::consumeMove($this->loadEngineState(), $playerId);
+        } catch (InvalidArgumentException $e) {
+            throw new BgaUserException(clienttranslate($e->getMessage()));
+        }
+        $this->persistPlayerActionFlags($state['players'][$playerId]);
 
         $this->notifyAllPlayers('heroMoved', clienttranslate('${player_name} moves'), [
+            'entity_id' => $entityId,
             'player_id' => $playerId,
             'player_name' => $this->getActivePlayerName(),
             'tile_id' => $tileId,
+            'action_points' => (int) $state['players'][$playerId]['action_points'],
+            'free_move_available' => !empty($state['players'][$playerId]['free_move_available']) ? 1 : 0,
+            'main_action_available' => !empty($state['players'][$playerId]['main_action_available']) ? 1 : 0,
         ]);
 
-        $this->gamestate->nextState('resolveAction');
+        if ($this->isActivePlayerTurnSpent()) {
+            $this->gamestate->nextState('endTurn');
+            return;
+        }
+
+        $this->gamestate->nextState('continueTurn');
     }
 
     public function actPlayCard(int $card_id, array $payload = []): void
@@ -230,34 +273,179 @@ class Hacknslash extends Table
         $this->checkAction('actPlayCard');
 
         $playerId = (int) $this->getActivePlayerId();
-        $card = $this->cards->getCard((int) $card_id);
-        if ($card === null || $card['location'] !== 'hand_' . $playerId) {
-            throw new BgaUserException(self::_('Card is not in your hand.'));
+        $powerId = (int) $card_id;
+        $power = $this->getObjectFromDB("SELECT power_key, power_cooldown FROM player_power WHERE player_power_id = $powerId AND player_id = $playerId");
+        if (!$power) {
+            throw new BgaUserException(clienttranslate('Card is not in your hand.'));
         }
 
-        $powerKey = $this->powerKeyForTypeArg((int) $card['type_arg']);
-        if ($powerKey === null) {
-            throw new BgaUserException(self::_('Unknown card.'));
+        $powerKey = (string) $power['power_key'];
+        if (!isset($this->bonus_cards[$powerKey])) {
+            throw new BgaUserException(clienttranslate('Unknown card.'));
         }
 
-        $this->resolvePowerForActivePlayer($powerKey, $payload);
+        if ((int) $power['power_cooldown'] > 0) {
+            throw new BgaUserException(clienttranslate('Card is on cooldown.'));
+        }
 
-        // Played cards go to discard.
-        $this->cards->moveCard((int) $card_id, 'discard');
+        $isFree = $this->isFreePowerAvailable($powerKey, (int) $power['power_cooldown'], $playerId);
+        if (!$isFree && !$this->isActivePlayerMainActionAvailable()) {
+            throw new BgaUserException(clienttranslate('Main action is not available.'));
+        }
 
-        $this->DbQuery("UPDATE player SET player_main_action_available = 0 WHERE player_id = $playerId");
+        $events = $this->resolvePowerForActivePlayer($powerKey, $payload);
+
+        $cooldown = (int) ($this->bonus_cards[$powerKey]['cooldown'] ?? 0);
+        $this->DbQuery("UPDATE player_power SET power_cooldown = $cooldown WHERE player_power_id = $powerId");
+        if ($isFree) {
+            $this->consumeFreePower($powerKey, $events, $cooldown);
+            $this->DbQuery("UPDATE player SET player_free_move_available = 0 WHERE player_id = $playerId");
+        } else {
+            $this->consumeActivePlayerMainActionPoint($playerId);
+            $this->startFreeActionChain($events);
+        }
+        $heroPhaseEnding = $this->isHeroPhaseEndingAfterActiveTurn($playerId);
+        if (!$heroPhaseEnding) {
+            $this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey);
+        }
+
+        if ($this->isActivePlayerTurnSpent()) {
+            $this->gamestate->nextState('endTurn');
+            return;
+        }
+
         $this->gamestate->nextState('resolveAction');
     }
 
     public function actAttack(int $target_id): void
     {
         $this->checkAction('actAttack');
+        if (!$this->isActivePlayerMainActionAvailable()) {
+            throw new BgaUserException(clienttranslate('Main action is not available.'));
+        }
 
-        $this->resolvePowerForActivePlayer('attack', ['target_entity_id' => (int) $target_id]);
+        $events = $this->resolvePowerForActivePlayer('attack', ['target_entity_id' => (int) $target_id]);
 
         $playerId = (int) $this->getActivePlayerId();
-        $this->DbQuery("UPDATE player SET player_main_action_available = 0 WHERE player_id = $playerId");
+        $this->consumeActivePlayerMainActionPoint($playerId);
+        $this->startFreeActionChain($events);
+        if (!$this->isHeroPhaseEndingAfterActiveTurn($playerId)) {
+            $this->notifyPlayerActionState($playerId, 0, 0);
+        }
+
+        if ($this->isActivePlayerTurnSpent()) {
+            $this->gamestate->nextState('endTurn');
+            return;
+        }
+
         $this->gamestate->nextState('resolveAction');
+    }
+
+    private function consumeActivePlayerMainActionPoint(int $playerId): void
+    {
+        $actionPoints = max(0, (int) $this->getUniqueValueFromDB("SELECT player_action_points FROM player WHERE player_id = $playerId") - 1);
+        $mainActionAvailable = $actionPoints > 0 ? 1 : 0;
+        $this->DbQuery("UPDATE player SET player_action_points = $actionPoints, player_main_action_available = $mainActionAvailable, player_free_move_available = 0 WHERE player_id = $playerId");
+    }
+
+    private function isFreePowerAvailable(string $powerKey, int $cooldown, int $playerId): bool
+    {
+        $freeTriggers = $this->bonus_cards[$powerKey]['free_triggers'] ?? [];
+        if (!is_array($freeTriggers) || $freeTriggers === []) {
+            return false;
+        }
+
+        $chain = $this->loadFreeActionChain();
+        $engine = new HNS_FreeActionEngine($chain['active_event_chain'], $chain['used_action_keys']);
+        return $engine->canUseFreeAction($powerKey, $freeTriggers, $cooldown);
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function consumeFreePower(string $powerKey, array $events, int $cooldown): void
+    {
+        $chain = $this->loadFreeActionChain();
+        $engine = new HNS_FreeActionEngine($chain['active_event_chain'], $chain['used_action_keys']);
+        $result = $engine->useFreeAction($powerKey, $this->bonus_cards[$powerKey]['free_triggers'] ?? [], 0, $cooldown, $events);
+        $this->saveFreeActionChain($result['active_event_chain'], $result['used_action_keys']);
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function startFreeActionChain(array $events): void
+    {
+        $this->saveFreeActionChain($events, []);
+    }
+
+    /**
+     * @return array{active_event_chain: array<int, array<string, mixed>>, used_action_keys: array<int, string>}
+     */
+    protected function loadFreeActionChain(): array
+    {
+        $row = $this->getObjectFromDB('SELECT active_event_chain, used_action_keys FROM free_chain ORDER BY chain_id DESC LIMIT 1');
+        if (!$row) {
+            return ['active_event_chain' => [], 'used_action_keys' => []];
+        }
+
+        $events = json_decode((string) ($row['active_event_chain'] ?? '[]'), true);
+        $used = json_decode((string) ($row['used_action_keys'] ?? '[]'), true);
+
+        return [
+            'active_event_chain' => is_array($events) ? array_values($events) : [],
+            'used_action_keys' => is_array($used) ? array_values(array_filter($used, 'is_string')) : [],
+        ];
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $events
+     * @param array<int, string> $usedActionKeys
+     */
+    protected function saveFreeActionChain(array $events, array $usedActionKeys): void
+    {
+        $eventsJson = $this->hns_sql_escape((string) json_encode(array_values($events)));
+        $usedJson = $this->hns_sql_escape((string) json_encode(array_values($usedActionKeys)));
+        $this->DbQuery('DELETE FROM free_chain');
+        $this->DbQuery("INSERT INTO free_chain (active_event_chain, used_action_keys, passed_player_ids) VALUES ('$eventsJson', '$usedJson', '[]')");
+    }
+
+    protected function clearFreeActionChain(): void
+    {
+        $this->DbQuery('DELETE FROM free_chain');
+    }
+
+    /** @return list<string> */
+    private function getFreeActionEventTypes(): array
+    {
+        $chain = $this->loadFreeActionChain();
+        $types = [];
+        foreach ($chain['active_event_chain'] as $event) {
+            if (isset($event['type']) && is_string($event['type'])) {
+                $types[] = $event['type'];
+            }
+        }
+        return array_values(array_unique($types));
+    }
+
+    private function notifyPlayerActionState(int $playerId, int $powerId, int $cooldown, string $powerKey = ''): void
+    {
+        $player = $this->getObjectFromDB("SELECT player_action_points action_points, player_free_move_available free_move_available, player_main_action_available main_action_available FROM player WHERE player_id = $playerId LIMIT 1");
+        $this->notifyAllPlayers('playerActionState', '', [
+            'player_id' => $playerId,
+            'action_points' => (int) ($player['action_points'] ?? 0),
+            'free_move_available' => (int) ($player['free_move_available'] ?? 0),
+            'main_action_available' => (int) ($player['main_action_available'] ?? 0),
+            'player_power_id' => $powerId,
+            'power_key' => $powerKey,
+            'power_cooldown' => $cooldown,
+            'free_action_events' => $this->getFreeActionEventTypes(),
+        ]);
+    }
+
+    private function isHeroPhaseEndingAfterActiveTurn(int $playerId): bool
+    {
+        if (!$this->isActivePlayerTurnSpent()) {
+            return false;
+        }
+
+        return HNS_RoundEngine::nextPlayerWithActions($this->loadEngineState(), $playerId) === null;
     }
 
     /**
@@ -267,23 +455,29 @@ class Hacknslash extends Table
      *
      * @param array<string, mixed> $payload
      */
-    private function resolvePowerForActivePlayer(string $powerKey, array $payload): void
+    private function resolvePowerForActivePlayer(string $powerKey, array $payload): array
     {
         if (!isset($this->bonus_cards[$powerKey])) {
-            throw new BgaUserException(self::_('Unknown power.'));
+            throw new BgaUserException(clienttranslate('Unknown power.'));
         }
 
         $playerId = (int) $this->getActivePlayerId();
         $state = $this->loadEngineState();
         $heroEntityId = $this->findHeroEntityIdForPlayer($state, $playerId);
         if ($heroEntityId === null) {
-            throw new BgaUserException(self::_('Active player has no hero on the board.'));
+            throw new BgaUserException(clienttranslate('Active player has no hero on the board.'));
         }
 
-        $result = HNS_PowerResolver::resolve($powerKey, $heroEntityId, $payload, $state, $this->bonus_cards);
+        try {
+            $result = HNS_PowerResolver::resolve($powerKey, $heroEntityId, $payload, $state, $this->bonus_cards);
+        } catch (InvalidArgumentException $e) {
+            throw new BgaUserException(clienttranslate($e->getMessage()));
+        }
 
         $this->persistEngineState($result['state']);
         $this->notifyEngineEvents($result['events']);
+
+        return $result['events'];
     }
 
     /**
@@ -303,13 +497,152 @@ class Hacknslash extends Table
     public function actEndTurn(): void
     {
         $this->checkAction('actEndTurn');
+        $playerId = (int) $this->getActivePlayerId();
+        $this->clearFreeActionChain();
+        $state = HNS_RoundEngine::endPlayerTurn($this->loadEngineState(), $playerId);
+        $this->persistPlayerActionFlags($state['players'][$playerId]);
         $this->gamestate->nextState('endTurn');
+    }
+
+    public function actChooseReward(string $mode, int $slot, string $powerKey): void
+    {
+        $this->checkAction('actChooseReward');
+        $playerId = (int) $this->getActivePlayerId();
+        $playerPowers = array_values($this->getCollectionFromDb("SELECT player_power_id id, power_slot slot, power_key, power_cooldown cooldown FROM player_power WHERE player_id = $playerId ORDER BY power_slot"));
+        $offer = $this->getCurrentRewardOffer();
+        $upgradeOffer = $this->getCurrentRewardUpgrades();
+
+        try {
+            if ($mode === 'replace') {
+                $updatedPowers = HNS_LevelReward::takeOfferedPower($playerPowers, $slot, $powerKey, $offer);
+            } elseif ($mode === 'upgrade') {
+                if (!in_array($slot, array_map(static fn (array $upgrade): int => (int) $upgrade['slot'], $upgradeOffer), true)) {
+                    throw new InvalidArgumentException('Power upgrade is not in the level reward offer.');
+                }
+                $updatedPowers = HNS_LevelReward::upgradeExistingPower($playerPowers, $slot, $this->bonus_cards);
+            } else {
+                throw new InvalidArgumentException('Unknown reward choice.');
+            }
+        } catch (InvalidArgumentException $e) {
+            throw new BgaUserException(clienttranslate($e->getMessage()));
+        }
+
+        $chosenPowerKey = $powerKey;
+        foreach ($updatedPowers as $playerPower) {
+            $powerSlot = (int) $playerPower['slot'];
+            $updatedPowerKey = $this->hns_sql_escape((string) $playerPower['power_key']);
+            $this->DbQuery("UPDATE player_power SET power_key = '$updatedPowerKey', power_cooldown = 0 WHERE player_id = $playerId AND power_slot = $powerSlot");
+            if ($powerSlot === $slot) {
+                $chosenPowerKey = (string) $playerPower['power_key'];
+            }
+        }
+
+        $this->saveCurrentRewardOffer([]);
+        $this->saveCurrentRewardUpgrades([]);
+        $this->notifyAllPlayers('rewardChosen', clienttranslate('${player_name} chooses a reward'), [
+            'player_id' => $playerId,
+            'player_name' => $this->getActivePlayerName(),
+            'mode' => $mode,
+            'slot' => $slot,
+            'power_key' => $chosenPowerKey,
+        ]);
+    }
+
+    public function actSkipFreeMove(): void
+    {
+        $this->checkAction('actSkipFreeMove');
+        $playerId = (int) $this->getActivePlayerId();
+        $this->DbQuery("UPDATE player SET player_free_move_available = 0 WHERE player_id = $playerId");
+        $this->nextStateAfterOptionalActionSkip();
+    }
+
+    public function actSkipMainAction(): void
+    {
+        $this->checkAction('actSkipMainAction');
+        $playerId = (int) $this->getActivePlayerId();
+        $this->DbQuery("UPDATE player SET player_main_action_available = 0, player_action_points = 0, player_free_move_available = 0 WHERE player_id = $playerId");
+        $this->nextStateAfterOptionalActionSkip();
+    }
+
+    private function nextStateAfterOptionalActionSkip(): void
+    {
+        if ($this->isActivePlayerTurnSpent()) {
+            $this->gamestate->nextState('endTurn');
+            return;
+        }
+
+        $this->gamestate->nextState('continueTurn');
+    }
+
+    private function getHeroEntityIdForPlayer(int $playerId): int
+    {
+        return (int) $this->getUniqueValueFromDB("SELECT entity_id FROM entity WHERE entity_type = 'hero' AND entity_owner = $playerId ORDER BY entity_id LIMIT 1");
+    }
+
+    private function assertFreeMoveTarget(int $entityId, int $tileId): void
+    {
+        $from = $this->getObjectFromDB("SELECT t.tile_x x, t.tile_y y FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_id = $entityId LIMIT 1");
+        $to = $this->getObjectFromDB("SELECT tile_x x, tile_y y FROM tile WHERE tile_id = $tileId LIMIT 1");
+
+        if (!$from || !$to || !HNS_BoardRules::isExactStep($from, $to, 1)) {
+            throw new BgaUserException(clienttranslate('Free move is limited to one orthogonal step.'));
+        }
+    }
+
+    /** @param array<string, mixed> $player */
+    private function persistPlayerActionFlags(array $player): void
+    {
+        $playerId = (int) $player['id'];
+        $freeMove = !empty($player['free_move_available']) ? 1 : 0;
+        $actionPoints = (int) ($player['action_points'] ?? (!empty($player['main_action_available']) ? 1 : 0));
+        $mainAction = $actionPoints > 0 ? 1 : 0;
+        $this->DbQuery("UPDATE player SET player_free_move_available = $freeMove, player_main_action_available = $mainAction, player_action_points = $actionPoints WHERE player_id = $playerId");
+    }
+
+    /** @return list<string> */
+    private function getCurrentRewardOffer(): array
+    {
+        $json = $this->getUniqueValueFromDB("SELECT var_value FROM global_var WHERE var_name = 'reward_offer'");
+        if (!is_string($json) || $json === '') {
+            return [];
+        }
+
+        $offer = json_decode($json, true);
+        return is_array($offer) ? array_values(array_filter($offer, 'is_string')) : [];
+    }
+
+    /** @param list<string> $offer */
+    private function saveCurrentRewardOffer(array $offer): void
+    {
+        $json = $this->hns_sql_escape((string) json_encode(array_values($offer)));
+        $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('reward_offer', '$json')");
+    }
+
+    /** @return list<array{slot:int, from:string, to:string}> */
+    private function getCurrentRewardUpgrades(): array
+    {
+        $json = $this->getUniqueValueFromDB("SELECT var_value FROM global_var WHERE var_name = 'reward_upgrades'");
+        if (!is_string($json) || $json === '') {
+            return [];
+        }
+
+        $upgrades = json_decode($json, true);
+        return is_array($upgrades) ? array_values(array_filter($upgrades, static fn ($upgrade): bool => is_array($upgrade))) : [];
+    }
+
+    /** @param list<array{slot:int, from:string, to:string}> $upgrades */
+    private function saveCurrentRewardUpgrades(array $upgrades): void
+    {
+        $json = $this->hns_sql_escape((string) json_encode(array_values($upgrades)));
+        $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('reward_upgrades', '$json')");
     }
 
     public function zombieTurn($state, $active_player): void
     {
         $statename = $state['name'];
         if ($state['type'] === 'activeplayer') {
+            $engineState = HNS_RoundEngine::endPlayerTurn($this->loadEngineState(), (int) $active_player);
+            $this->persistPlayerActionFlags($engineState['players'][(int) $active_player]);
             $this->gamestate->nextState('endTurn');
         } else {
             throw new feException('Zombie mode not supported at this game state: ' . $statename);

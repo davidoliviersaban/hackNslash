@@ -41,8 +41,11 @@ final class HNS_PowerResolver
      */
     private static function resolveAttack(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
-        $targetEntityId = (int) ($payload['target_entity_id'] ?? 0);
         self::assertEntityExists($state, $sourceEntityId);
+        $targetEntityId = (int) ($payload['target_entity_id'] ?? 0);
+        if ($targetEntityId === 0 && !empty($payload['target_tile_id'])) {
+            $targetEntityId = self::attackTargetEntityIdForTile((int) $payload['target_tile_id'], $state);
+        }
         self::assertEntityExists($state, $targetEntityId);
 
         $sourceType = (string) ($state['entities'][$sourceEntityId]['type'] ?? '');
@@ -183,12 +186,13 @@ final class HNS_PowerResolver
             }
 
             $nextTileId = (int) $nextTile['id'];
-            if (!HNS_BoardRules::isTileWalkable($nextTile) || !HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
+            if (!HNS_BoardRules::isTileWalkable($nextTile) || self::monsterIdsOnTile($nextTileId, $state['entities'], $entityId) !== [] || !HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
                 $state = self::resolveBlockedMovement($entityId, $nextTileId, $sourceEntityId, $state, $events);
             }
 
-            if (HNS_BoardRules::isTileWalkable($nextTile) && HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
+            if (HNS_BoardRules::isTileWalkable($nextTile) && self::monsterIdsOnTile($nextTileId, $state['entities'], $entityId) === [] && HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$entityId], $entityId)) {
                 $state['entities'][$entityId]['tile_id'] = $nextTileId;
+                $events[] = ['type' => 'monsterMove', 'source_entity_id' => $entityId, 'target_tile_id' => $nextTileId];
             }
         }
 
@@ -257,10 +261,13 @@ final class HNS_PowerResolver
      */
     private static function resolveBlockedMovement(int $movingEntityId, int $targetTileId, int $damageSourceEntityId, array $state, array &$events): array
     {
-        $blockingMonsterId = self::weakestMonsterOnTile($targetTileId, $state['entities'], $movingEntityId);
-        if ($blockingMonsterId !== null) {
+        $blockingMonsterIds = self::monsterIdsOnTile($targetTileId, $state['entities'], $movingEntityId);
+        if ($blockingMonsterIds !== []) {
             $state = self::damageEntity($movingEntityId, 1, $damageSourceEntityId, $state, $events);
-            return self::damageEntity($blockingMonsterId, 1, $damageSourceEntityId, $state, $events);
+            foreach ($blockingMonsterIds as $blockingMonsterId) {
+                $state = self::damageEntity($blockingMonsterId, 1, $damageSourceEntityId, $state, $events);
+            }
+            return $state;
         }
 
         return self::damageEntity($movingEntityId, 1, $damageSourceEntityId, $state, $events);
@@ -291,6 +298,26 @@ final class HNS_PowerResolver
         }
 
         return $weakestMonsterId;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $entities
+     * @return array<int, int>
+     */
+    private static function monsterIdsOnTile(int $tileId, array $entities, int $movingEntityId): array
+    {
+        $monsterIds = [];
+        foreach ($entities as $entityId => $entity) {
+            if ((int) $entityId === $movingEntityId || ($entity['state'] ?? 'active') !== 'active') {
+                continue;
+            }
+
+            if (($entity['type'] ?? null) === 'monster' && (int) ($entity['tile_id'] ?? 0) === $tileId) {
+                $monsterIds[] = (int) $entityId;
+            }
+        }
+        sort($monsterIds);
+        return $monsterIds;
     }
 
     /**
@@ -332,7 +359,7 @@ final class HNS_PowerResolver
     private static function damageEntity(int $targetEntityId, int $damage, int $sourceEntityId, array $state, array &$events): array
     {
         if (($state['entities'][$targetEntityId]['type'] ?? null) === 'monster'
-            && in_array('shield', $state['level_monster_abilities'] ?? [], true)
+            && ($state['entities'][$targetEntityId]['has_shield'] ?? false) === true
             && ($state['entities'][$targetEntityId]['shield_broken'] ?? false) !== true
             && $damage > 0
         ) {
@@ -386,6 +413,25 @@ final class HNS_PowerResolver
         if (!isset($state['entities'][$entityId])) {
             throw new InvalidArgumentException("Unknown entity $entityId.");
         }
+    }
+
+    /** @param array<string, mixed> $state */
+    private static function attackTargetEntityIdForTile(int $tileId, array $state): int
+    {
+        self::assertTileExists($state, $tileId);
+        foreach ($state['entities'] as $entityId => $entity) {
+            if (($entity['state'] ?? 'active') === 'dead') {
+                continue;
+            }
+            if (!in_array($entity['type'] ?? null, ['monster', 'boss'], true)) {
+                continue;
+            }
+            if ((int) ($entity['tile_id'] ?? 0) === $tileId) {
+                return (int) $entityId;
+            }
+        }
+
+        throw new InvalidArgumentException('No attack target on selected tile.');
     }
 
     /** @param array<string, mixed> $state */

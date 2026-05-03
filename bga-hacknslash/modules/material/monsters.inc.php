@@ -36,7 +36,7 @@ $monsters = [
     3 => [
         'name' => clienttranslate('Evil Eye'),
         'level' => 1,
-        'health' => 2,
+        'health' => 1,
         'spawn_count' => 1,
         'move' => 0,
         'move_metric' => 'orthogonal',
@@ -73,8 +73,8 @@ $monsters = [
         'move' => 1,
         'move_metric' => 'orthogonal',
         'range' => 4,
-        'min_range' => 1,
-        'range_metric' => 'orthogonal',
+        'min_range' => 2,
+        'range_metric' => 'chebyshev',
         'damage' => 1,
         'size' => 'small',
         'can_attack' => true,
@@ -90,7 +90,7 @@ $monsters = [
         'move_metric' => 'orthogonal',
         'range' => 3,
         'min_range' => 2,
-        'range_metric' => 'orthogonal',
+        'range_metric' => 'chebyshev',
         'damage' => 1,
         'size' => 'small',
         'can_attack' => true,
@@ -172,7 +172,7 @@ $monsters = [
         'size' => 'small',
         'can_attack' => true,
         'can_move' => true,
-        'can_attack_and_move' => true,
+        'can_attack_and_move' => false,
     ],
 ];
 
