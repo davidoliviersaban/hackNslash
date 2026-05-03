@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS `tile` (
     `tile_type` VARCHAR(32) NOT NULL COMMENT 'floor, wall, entry, exit, hole, spikes, etc.',
     `tile_state` VARCHAR(32) NOT NULL DEFAULT 'hidden' COMMENT 'hidden, revealed, cleared',
     `tile_level` TINYINT UNSIGNED NOT NULL DEFAULT '1',
+    `tile_spawn_label` VARCHAR(8) DEFAULT NULL,
     PRIMARY KEY (`tile_id`),
     UNIQUE KEY `coords_level` (`tile_x`, `tile_y`, `tile_level`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;

@@ -6,3 +6,9 @@ Impulsion I,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a
 Impulsion II,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a 2 cases. Ne peut pas cibler un obstacle. Cooldown 2.,0,0,1-2 orthogonal,0,0,0,0,Gratuit apres une carte,2
 Impulsion III,Gratuit apres n'importe quelle carte. Deplacement orthogonal jusqu'a 2 cases. Ne peut pas cibler un obstacle. Cooldown 1.,0,0,1-2 orthogonal,0,0,0,0,Gratuit apres une carte,3
 Trou noir I,Attaque a distance. Selectionne une case a portee 2 diagonales incluses puis attire jusqu'a 2 monstres a distance 1 de cette case. Cooldown 2.,2,0,0,0-2 diagonale,0,1,0,Declenche apres attraction ou poussee,1
+Attaque puissante I,Gratuit apres bouclier casse. Inflige 3 degats a portee 1 orthogonale. Cooldown 2.,1,3,0,0-1 orthogonal,0,0,0,Gratuit apres bouclier casse,1
+Attaque puissante II,Gratuit apres bouclier casse. Inflige 3 degats a portee 1 orthogonale puis repousse de 1 case. Cooldown 2.,1,3,0,0-1 orthogonal,1,0,0,Gratuit apres bouclier casse,2
+Attaque puissante III,Gratuit apres bouclier casse. Inflige 4 degats a portee 1 orthogonale puis repousse de 1 case. Cooldown 2.,1,4,0,0-1 orthogonal,1,0,0,Gratuit apres bouclier casse,3
+Point Blank I,Gratuit apres repousse. Inflige 1 degat a distance de 1 a 2 cases en Chebyshev puis repousse de 1 case. Cooldown 2.,1,1,0,1-2 diagonale,1,0,0,Gratuit apres repousse,1
+Point Blank II,Gratuit apres repousse. Inflige 2 degats a distance de 1 a 2 cases en Chebyshev puis repousse de 1 case. Cooldown 2.,1,2,0,1-2 diagonale,1,0,0,Gratuit apres repousse,2
+Point Blank III,Gratuit apres repousse. Inflige 3 degats a distance de 1 a 2 cases en Chebyshev puis repousse de 2 cases. Cooldown 2.,1,3,0,1-2 diagonale,2,0,0,Gratuit apres repousse,3

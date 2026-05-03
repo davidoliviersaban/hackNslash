@@ -3,7 +3,7 @@
 trait HNS_Setup
 {
     private const HNS_STARTING_POWER_KEYS = ['strike', 'attack', 'attack'];
-    private const HNS_BOSS_FIGHT_POWER_KEYS = ['dash_3', 'vortex_2'];
+    private const HNS_BOSS_FIGHT_POWER_COUNT = 2;
 
     protected function setupStaticCards(): void
     {
@@ -39,17 +39,20 @@ trait HNS_Setup
     protected function setupInitialBoard(int $level): void
     {
         $seed = random_int(1, PHP_INT_MAX);
-        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments());
+        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments($level));
 
         $abilities = $this->hns_sql_escape((string) json_encode($levelState['level_monster_abilities']));
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('level_seed', '$seed')");
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('level_monster_abilities', '$abilities')");
+        $this->ensureTileSpawnLabelColumn();
+        $spawnLabels = $this->spawnLabelsByCoordinate($levelState['layout']['monster_starts'] ?? []);
 
         foreach ($levelState['layout']['terrain'] as $tile) {
             $x = (int) $tile['x'];
             $y = (int) $tile['y'];
             $type = $this->hns_sql_escape((string) $tile['terrain']);
-            $this->DbQuery("INSERT INTO tile (tile_x, tile_y, tile_type, tile_state, tile_level) VALUES ($x, $y, '$type', 'revealed', $level)");
+            $spawnLabel = $this->hns_sql_nullable_string($spawnLabels["$x,$y"] ?? null);
+            $this->DbQuery("INSERT INTO tile (tile_x, tile_y, tile_type, tile_state, tile_level, tile_spawn_label) VALUES ($x, $y, '$type', 'revealed', $level, $spawnLabel)");
         }
 
         // Pre-load the (x, y) -> tile_id map for this level instead of querying
@@ -94,9 +97,16 @@ trait HNS_Setup
     }
 
     /** @return array<int, string> */
-    protected function drawLevelEnchantments(): array
+    protected function drawLevelEnchantments(int $level): array
     {
-        return [];
+        if ($level <= HNS_FIRST_LEVEL || $level >= HNS_BOSS_LEVEL) {
+            return [];
+        }
+
+        $cycle = ['shield', 'thorns', null];
+        $enchantment = $cycle[($level - HNS_FIRST_LEVEL - 1) % count($cycle)];
+
+        return $enchantment === null ? [] : [$enchantment];
     }
 
     protected function tileIdForCoords(int $x, int $y, int $level): int
@@ -118,6 +128,24 @@ trait HNS_Setup
             $this->syncPlayerPositionFromTile($playerId, $tileId);
             $this->initializePlayerPowers($playerId, $powerKeys);
         }
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $monsterStarts
+     * @return array<string, string>
+     */
+    private function spawnLabelsByCoordinate(array $monsterStarts): array
+    {
+        $labels = [];
+        foreach ($monsterStarts as $start) {
+            if (!isset($start['x'], $start['y'], $start['label'])) {
+                continue;
+            }
+
+            $labels[((int) $start['x']) . ',' . ((int) $start['y'])] = (string) $start['label'];
+        }
+
+        return $labels;
     }
 
     /** @return list<int> */
@@ -172,7 +200,12 @@ trait HNS_Setup
 
     protected function bossFightStartingPowers(): array
     {
-        return self::HNS_BOSS_FIGHT_POWER_KEYS;
+        $powerKeys = array_values(array_filter(array_keys($this->bonus_cards), function (string $powerKey): bool {
+            return (int) ($this->bonus_cards[$powerKey]['rank'] ?? 0) === 3;
+        }));
+        shuffle($powerKeys);
+
+        return array_slice($powerKeys, 0, self::HNS_BOSS_FIGHT_POWER_COUNT);
     }
 
     protected function initializePlayerPowers(int $playerId, ?array $powerKeys = null): void

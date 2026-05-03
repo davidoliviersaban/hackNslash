@@ -96,4 +96,27 @@ final class BoardRulesTest extends TestCase
 
         $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[10], 10));
     }
+
+    public function testLineOfSightIsBlockedByObstacleBetweenTiles(): void
+    {
+        $tiles = [
+            1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+            2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'pillar'],
+            3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'floor'],
+        ];
+
+        $this->assertFalse(HNS_BoardRules::hasLineOfSight($tiles[1], $tiles[3], $tiles));
+    }
+
+    public function testLineOfSightAllowsClearTilesAndTargetObstacle(): void
+    {
+        $tiles = [
+            1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+            2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+            3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'pillar'],
+        ];
+
+        $this->assertTrue(HNS_BoardRules::hasLineOfSight($tiles[1], $tiles[2], $tiles));
+        $this->assertTrue(HNS_BoardRules::hasLineOfSight($tiles[1], $tiles[3], $tiles));
+    }
 }

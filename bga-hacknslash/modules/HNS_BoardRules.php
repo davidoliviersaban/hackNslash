@@ -70,11 +70,68 @@ final class HNS_BoardRules
     }
 
     /**
+     * @param array{x:int, y:int} $from
+     * @param array{x:int, y:int} $to
+     * @param array<int, array<string, mixed>> $tiles
+     */
+    public static function hasLineOfSight(array $from, array $to, array $tiles): bool
+    {
+        $x = (int) $from['x'];
+        $y = (int) $from['y'];
+        $targetX = (int) $to['x'];
+        $targetY = (int) $to['y'];
+        $dx = abs($targetX - $x);
+        $dy = abs($targetY - $y);
+        $stepX = $targetX <=> $x;
+        $stepY = $targetY <=> $y;
+        $walkedX = 0;
+        $walkedY = 0;
+
+        while ($walkedX < $dx || $walkedY < $dy) {
+            $decision = (1 + (2 * $walkedX)) * $dy - (1 + (2 * $walkedY)) * $dx;
+            if ($decision === 0) {
+                $x += $stepX;
+                $y += $stepY;
+                $walkedX++;
+                $walkedY++;
+            } elseif ($decision < 0) {
+                $x += $stepX;
+                $walkedX++;
+            } else {
+                $y += $stepY;
+                $walkedY++;
+            }
+
+            if ($x === $targetX && $y === $targetY) {
+                return true;
+            }
+
+            if (self::hasBlockingTileAt($x, $y, $tiles)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @param array<string, mixed> $tile
      */
     public static function isTileWalkable(array $tile): bool
     {
         return in_array($tile['type'] ?? null, self::WALKABLE_TILE_TYPES, true);
+    }
+
+    /** @param array<int, array<string, mixed>> $tiles */
+    private static function hasBlockingTileAt(int $x, int $y, array $tiles): bool
+    {
+        foreach ($tiles as $tile) {
+            if ((int) ($tile['x'] ?? 0) === $x && (int) ($tile['y'] ?? 0) === $y && !self::isTileWalkable($tile)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

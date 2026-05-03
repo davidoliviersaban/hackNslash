@@ -8,10 +8,10 @@ define([
   // are kept on the global scope so this.format_block('jstpl_hns_*', ...) keeps
   // working as before.
   /* eslint-disable no-undef */
-  jstpl_hns_tile = '<div id="hns_tile_${id}" class="hns_tile hns_tile_${type}" style="left:${left}px; top:${top}px; width:${width}px; height:${height}px; background-image:url(\'${image}\');" data-tile-id="${id}" title="${type}"></div>';
-  jstpl_hns_entity = '<div id="hns_entity_${id}" class="hns_entity hns_entity_${type} hns_entity_${slug} ${state_class}" data-entity-id="${id}" data-entity-type="${type}" data-monster-key="${monster_key}"><img src="${image}" alt="${label}" /><span class="hns_entity_health">${health}</span></div>';
+  jstpl_hns_tile = '<div id="hns_tile_${id}" class="hns_tile hns_tile_${type}" style="left:${left}px; top:${top}px; width:${width}px; height:${height}px; background-image:url(\'${image}\');" data-tile-id="${id}" title="${type}"><span class="hns_spawn_label">${spawn_label}</span></div>';
+  jstpl_hns_entity = '<div id="hns_entity_${id}" class="hns_entity hns_entity_${type} hns_entity_${slug} ${state_class}" data-entity-id="${id}" data-entity-type="${type}" data-monster-key="${monster_key}"><img src="${image}" alt="${label}" /><span class="hns_entity_effects">${effects}</span><span class="hns_entity_health">${health}</span></div>';
   jstpl_hns_monster_card = '<div id="hns_monster_card_${key}" class="hns_monster_card ${state_class}" data-monster-key="${key}"><div class="hns_monster_card_effects">${effects}</div><img src="${image}" alt="${name}" /><div class="hns_monster_card_footer"><strong>${name}</strong><span>${count}</span></div><div class="hns_monster_card_losses">${losses}</div></div>';
-  jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}"><img src="${image}" alt="${name}" /><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
+  jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}"><img src="${image}" alt="${name}" /><div class="hns_power_card_name">${name}</div><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
   jstpl_hns_hero_card = '<div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><span>${health_label}: ${health}</span><span>${ap_label}: ${action_points}</span></div><div class="hns_hero_effects">${effects}</div><div class="hns_hero_mini_powers">${powers}</div>';
   jstpl_hns_event = '<div class="hns_event hns_event_${type}">${message}</div>';
   /* eslint-enable no-undef */
@@ -131,6 +131,7 @@ define([
           top: box.top,
           width: box.width,
           height: box.height,
+          spawn_label: this.escapeHtml(tile.spawn_label || ''),
           image: this.getTileImage(tile, tileGrid)
         }), 'hns_board');
         this.connect($('hns_tile_' + tile.id), 'onclick', 'onTileClick');
@@ -193,10 +194,11 @@ define([
         id: entity.id,
         type: entity.type,
         slug: entityInfo.slug,
-        state_class: entity.state === 'dead' || parseInt(entity.health || 0, 10) <= 0 ? 'hns_entity_dead' : '',
+        state_class: this.entityStateClasses(entity),
         monster_key: entityInfo.monsterKey,
         image: entityInfo.image,
         label: entityInfo.label,
+        effects: this.renderEntityEffects(entity),
         health: entity.health || ''
       }), 'hns_board');
 
@@ -208,6 +210,20 @@ define([
       });
 
       this.connect(node, 'onclick', 'onEntityClick');
+    },
+
+    entityStateClasses: function (entity) {
+      var classes = [];
+      if (entity.state === 'dead' || parseInt(entity.health || 0, 10) <= 0) {
+        classes.push('hns_entity_dead');
+      }
+      if (this.hasActiveShield(entity)) {
+        classes.push('hns_entity_shielded');
+      }
+      if (this.hasThorns(entity)) {
+        classes.push('hns_entity_thorns');
+      }
+      return classes.join(' ');
     },
 
     renderMonsterCards: function () {
@@ -407,10 +423,16 @@ define([
         }
         var payload = { target_tile_id: tileId, selected_tile_id: tileId };
         var power = this.getPowerInfo(this.selectedPowerKey);
-        if (power.effect === 'attack') {
+        if (power.effect === 'attack' || power.effect === 'dash_attack') {
           var targetEntityId = this.monsterIdOnTile(tileId);
           if (targetEntityId !== null) {
             payload.target_entity_id = targetEntityId;
+          }
+        }
+        if (power.effect === 'heal') {
+          var heroEntityId = this.heroIdOnTile(tileId);
+          if (heroEntityId !== null) {
+            payload.target_entity_id = heroEntityId;
           }
         }
         this.playSelectedPower(payload);
@@ -439,7 +461,14 @@ define([
           this.toggleConfirmTarget(entityId);
           return;
         }
-        this.playSelectedPower({ target_entity_id: entityId });
+        var payload = { target_entity_id: entityId };
+        var power = this.getPowerInfo(this.selectedPowerKey);
+        var entity = this.gamedatas.entities && this.gamedatas.entities[entityId];
+        if ((power.effect === 'area_attack' || power.effect === 'jump') && entity && entity.tile_id) {
+          payload.target_tile_id = entity.tile_id;
+          payload.selected_tile_id = entity.tile_id;
+        }
+        this.playSelectedPower(payload);
         return;
       }
 
@@ -468,6 +497,19 @@ define([
         if (power && this.checkAction('actChooseReward')) {
           this.bgaPerformAction('actChooseReward', { mode: 'replace', slot: power.slot, power_key: this.selectedRewardPowerKey });
         }
+        return;
+      }
+
+      var info = this.getPowerInfo(powerKey);
+      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      if (this.isHeroMovementPowerBlockedBySlime(info, hero)) {
+        return;
+      }
+
+      if (info.effect === 'move_area_attack' && info.distance && parseInt(info.distance[1] || 0, 10) === 0) {
+        this.selectedPowerKey = powerKey;
+        this.selectedPowerSlot = slot;
+        this.playSelectedPower({});
         return;
       }
 
@@ -637,6 +679,7 @@ define([
         'afterKill',
         'afterPushOrPull',
         'entityDamaged',
+        'entityHealed',
         'thornsDamage',
         'shieldBroken',
         'monsterAttack',
@@ -895,6 +938,22 @@ define([
       return /(^|\s)(slimed|stuck|stick)(\s|$)/.test(String(status || ''));
     },
 
+    isHeroMovementPowerBlockedBySlime: function (power, hero) {
+      if (!power || !hero || !this.hasSlimeStatus(hero.status)) {
+        return false;
+      }
+
+      if (power.effect === 'dash') {
+        return false;
+      }
+
+      if (power.effect === 'dash_attack' || power.effect === 'jump') {
+        return true;
+      }
+
+      return power.effect === 'move_area_attack' && power.distance && parseInt(power.distance[1] || 0, 10) > 0;
+    },
+
     clearFreeMoveHighlights: function () {
       dojo.query('.hns_free_move_tile').removeClass('hns_free_move_tile');
     },
@@ -909,6 +968,10 @@ define([
         return;
       }
 
+      if (this.isHeroMovementPowerBlockedBySlime(power, hero)) {
+        return;
+      }
+
       for (var tileId in tiles) {
         var tile = tiles[tileId];
         if (this.isTileValidPowerTarget(from, tile, power)) {
@@ -919,7 +982,7 @@ define([
       var entities = this.gamedatas.entities || {};
       for (var entityId in entities) {
         var entity = entities[entityId];
-        if (entity.type === 'monster' && (entity.state || 'active') === 'active' && this.isEntityTargetableBySelectedPower(from, entity, power)) {
+        if ((entity.state || 'active') === 'active' && this.isEntityTargetableBySelectedPower(from, entity, power)) {
           dojo.addClass('hns_entity_' + entityId, 'hns_power_target_entity');
         }
       }
@@ -964,7 +1027,7 @@ define([
       var metric = monster.range_metric || 'orthogonal';
 
       if (metric === 'front_arc') {
-        return this.isTileInMonsterFrontArc(from, tile);
+        return this.isTileInMonsterFrontArc(from, tile) && this.hasLineOfSight(from, tile);
       }
 
       if (metric === 'orthogonal' && String(from.x) !== String(tile.x) && String(from.y) !== String(tile.y)) {
@@ -972,7 +1035,7 @@ define([
       }
 
       var distance = this.powerDistance(from, tile, metric);
-      return distance >= minRange && distance <= maxRange;
+      return distance >= minRange && distance <= maxRange && this.hasLineOfSight(from, tile);
     },
 
     isTileInMonsterFrontArc: function (from, tile) {
@@ -982,6 +1045,18 @@ define([
     },
 
     isEntityTargetableBySelectedPower: function (from, entity, power) {
+      if (power.effect === 'heal') {
+        return entity.type === 'hero' && this.isEntityInPowerRange(from, entity, power);
+      }
+      if (power.effect === 'dash_attack') {
+        return (entity.type === 'monster' || entity.type === 'boss') && this.hasDashAttackDestination(from, entity, power);
+      }
+      if (power.effect === 'jump') {
+        return (entity.type === 'monster' || entity.type === 'boss') && (parseInt(power.damage || 0, 10) > 0 || parseInt(power.push_distance || 0, 10) > 0) && this.isEntityInPowerRangeIgnoringLineOfSight(from, entity, power);
+      }
+      if (entity.type !== 'monster' && entity.type !== 'boss') {
+        return false;
+      }
       if (power.effect !== 'pull') {
         return this.isEntityInPowerRange(from, entity, power);
       }
@@ -998,7 +1073,23 @@ define([
         return false;
       }
 
+      if (['attack', 'area_attack', 'pull', 'move_area_attack'].indexOf(power.effect) !== -1 && !this.hasLineOfSight(from, tile)) {
+        return false;
+      }
+
       if (power.effect === 'dash') {
+        return this.isWalkableTile(tile) && !this.isTileOccupied(tile.id);
+      }
+
+      if (power.effect === 'jump') {
+        var monsterId = this.monsterIdOnTile(tile.id);
+        if (monsterId !== null) {
+          return parseInt(power.damage || 0, 10) > 0 || parseInt(power.push_distance || 0, 10) > 0;
+        }
+        return this.isWalkableTile(tile) && !this.isTileOccupied(tile.id);
+      }
+
+      if (power.effect === 'move_area_attack') {
         return this.isWalkableTile(tile) && !this.isTileOccupied(tile.id);
       }
 
@@ -1008,6 +1099,19 @@ define([
 
       if (power.effect === 'pull') {
         return this.monsterIdsAdjacentToTile(tile.id).length > 0;
+      }
+
+      if (power.effect === 'area_attack') {
+        return true;
+      }
+
+      if (power.effect === 'heal') {
+        return this.heroIdOnTile(tile.id) !== null;
+      }
+
+      if (power.effect === 'dash_attack') {
+        var targetEntityId = this.monsterIdOnTile(tile.id);
+        return targetEntityId !== null && this.hasDashAttackDestination(from, this.gamedatas.entities[targetEntityId], power);
       }
 
       return true;
@@ -1173,10 +1277,10 @@ define([
       var entities = this.gamedatas.entities || {};
       for (var entityId in entities) {
         entity = entities[entityId];
-        if ((entity.type !== 'monster' && entity.type !== 'boss') || (entity.state || 'active') !== 'active') {
+        if ((entity.state || 'active') !== 'active') {
           continue;
         }
-        if (this.isEntityInPowerRange(from, entity, power)) {
+        if (this.isEntityTargetableBySelectedPower(from, entity, power)) {
           ids.push(String(entityId));
         }
       }
@@ -1224,6 +1328,40 @@ define([
       return null;
     },
 
+    heroIdOnTile: function (tileId) {
+      var entities = this.gamedatas.entities || {};
+      for (var entityId in entities) {
+        var entity = entities[entityId];
+        if (entity.type !== 'hero' || (entity.state || 'active') !== 'active') {
+          continue;
+        }
+        if (String(entity.tile_id) === String(tileId)) {
+          return entityId;
+        }
+      }
+      return null;
+    },
+
+    hasDashAttackDestination: function (from, targetEntity, power) {
+      var targetTile = targetEntity && this.gamedatas.tiles && this.gamedatas.tiles[targetEntity.tile_id];
+      var tiles = this.gamedatas.tiles || {};
+      if (!targetTile) {
+        return false;
+      }
+
+      for (var tileId in tiles) {
+        var tile = tiles[tileId];
+        if (!this.isTileInPowerRange(from, tile, power) || !this.isWalkableTile(tile) || this.isTileOccupied(tile.id)) {
+          continue;
+        }
+        if (this.powerDistance(tile, targetTile, 'orthogonal') === 1 && (String(tile.x) === String(targetTile.x) || String(tile.y) === String(targetTile.y)) && this.hasLineOfSight(tile, targetTile)) {
+          return true;
+        }
+      }
+
+      return false;
+    },
+
     isTileInPowerRange: function (from, tile, power) {
       var range = power.range || power.distance || [0, 0];
       if ((power.range_metric || 'orthogonal') === 'orthogonal' && String(from.x) !== String(tile.x) && String(from.y) !== String(tile.y)) {
@@ -1235,7 +1373,66 @@ define([
 
     isEntityInPowerRange: function (from, entity, power) {
       var tile = this.gamedatas.tiles && this.gamedatas.tiles[entity.tile_id];
+      return !!tile && this.isTileInPowerRange(from, tile, power) && this.hasLineOfSight(from, tile);
+    },
+
+    isEntityInPowerRangeIgnoringLineOfSight: function (from, entity, power) {
+      var tile = this.gamedatas.tiles && this.gamedatas.tiles[entity.tile_id];
       return !!tile && this.isTileInPowerRange(from, tile, power);
+    },
+
+    hasLineOfSight: function (from, to) {
+      if (!from || !to) {
+        return false;
+      }
+
+      var x = parseInt(from.x, 10);
+      var y = parseInt(from.y, 10);
+      var targetX = parseInt(to.x, 10);
+      var targetY = parseInt(to.y, 10);
+      var dx = Math.abs(targetX - x);
+      var dy = Math.abs(targetY - y);
+      var stepX = targetX === x ? 0 : (targetX > x ? 1 : -1);
+      var stepY = targetY === y ? 0 : (targetY > y ? 1 : -1);
+      var walkedX = 0;
+      var walkedY = 0;
+
+      while (walkedX < dx || walkedY < dy) {
+        var decision = (1 + (2 * walkedX)) * dy - (1 + (2 * walkedY)) * dx;
+        if (decision === 0) {
+          x += stepX;
+          y += stepY;
+          walkedX++;
+          walkedY++;
+        } else if (decision < 0) {
+          x += stepX;
+          walkedX++;
+        } else {
+          y += stepY;
+          walkedY++;
+        }
+
+        if (x === targetX && y === targetY) {
+          return true;
+        }
+
+        if (this.hasBlockingTileAt(x, y)) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+
+    hasBlockingTileAt: function (x, y) {
+      var tiles = this.gamedatas.tiles || {};
+      for (var tileId in tiles) {
+        var tile = tiles[tileId];
+        if (parseInt(tile.x || 0, 10) === x && parseInt(tile.y || 0, 10) === y && !this.isWalkableTile(tile)) {
+          return true;
+        }
+      }
+      return false;
     },
 
     powerDistance: function (from, to, metric) {
@@ -1326,6 +1523,9 @@ define([
       }
       if (event.type === 'bossPhaseStarted') {
         this.updateBossPhaseFromEvent(event);
+      }
+      if (event.type === 'shieldBroken') {
+        this.updateEntityShieldFromEvent(event);
       }
       if (['monsterAttack', 'monsterStick', 'monsterCharge', 'monsterFrontArcAttack', 'monsterSummon'].indexOf(event.type) !== -1) {
         this.animateMonsterAttack(event);
@@ -1530,6 +1730,9 @@ define([
       if (event.players) {
         this.gamedatas.players = event.players;
       }
+      if (event.player_powers) {
+        this.gamedatas.player_powers = event.player_powers;
+      }
       if (event.level_monster_abilities) {
         this.gamedatas.level_monster_abilities = event.level_monster_abilities;
       }
@@ -1537,6 +1740,7 @@ define([
       this.selectedEntityId = null;
       this.clearFreeMoveHighlights();
       this.renderBoard(this.gamedatas.tiles, this.gamedatas.entities);
+      this.renderPowerCards();
       this.scheduleFreeMoveHighlight();
     },
 
@@ -1553,6 +1757,36 @@ define([
         this.markEntityDead(entityId);
       }
       this.updatePlayerHealthFromHeroEntity(entityId);
+    },
+
+    updateEntityShieldFromEvent: function (event) {
+      var entityId = event.source_entity_id;
+      if (!entityId || !this.gamedatas.entities || !this.gamedatas.entities[entityId]) {
+        return;
+      }
+
+      this.gamedatas.entities[entityId].shield_broken = true;
+      var node = $('hns_entity_' + entityId);
+      if (node) {
+        dojo.removeClass(node, 'hns_entity_shielded');
+        dojo.query('.hns_entity_shield_icon', node).forEach(function (shieldIcon) {
+          dojo.destroy(shieldIcon);
+        });
+      }
+      this.updateEntityEffects(entityId);
+    },
+
+    updateEntityEffects: function (entityId) {
+      var node = $('hns_entity_' + entityId);
+      var entity = this.gamedatas.entities && this.gamedatas.entities[entityId];
+      if (!node || !entity) {
+        return;
+      }
+
+      var effects = dojo.query('.hns_entity_effects', node);
+      if (effects.length > 0) {
+        effects[0].innerHTML = this.renderEntityEffects(entity);
+      }
     },
 
     markEntityDead: function (entityId) {
@@ -1669,6 +1903,35 @@ define([
         html += '<img class="hns_effect_icon" src="' + this.getAssetUrl('cards/monsters/thorns.webp') + '" alt="Thorns" />';
       }
       return html;
+    },
+
+    renderEntityEffects: function (entity) {
+      var effects = '';
+      if (this.hasActiveShield(entity)) {
+        effects += '<img class="hns_entity_shield_icon" src="' + this.getAssetUrl('tiles/markers/shield.webp') + '" alt="Shield" title="Shield" />';
+      }
+      if (this.hasThorns(entity)) {
+        effects += '<img class="hns_entity_thorns_icon" src="' + this.getAssetUrl('cards/monsters/thorns.webp') + '" alt="Thorns" title="Thorns" />';
+      }
+      return effects;
+    },
+
+    hasActiveShield: function (entity) {
+      return !!entity
+        && (entity.type === 'monster' || entity.type === 'boss')
+        && parseInt(entity.has_shield || 0, 10) === 1
+        && parseInt(entity.shield_broken || 0, 10) !== 1;
+    },
+
+    hasThorns: function (entity) {
+      if (!entity || (entity.type !== 'monster' && entity.type !== 'boss')) {
+        return false;
+      }
+      var status = String(entity.status || '');
+      if (status.indexOf('thorn') !== -1) {
+        return true;
+      }
+      return (this.gamedatas.level_monster_abilities || []).indexOf('thorns') !== -1;
     },
 
     renderHeroEffects: function (player) {
@@ -1994,7 +2257,7 @@ define([
         'quick-shot_1': 'cards/powers/quick-shot-1.webp',
         'quick-shot_2': 'cards/powers/quick-shot-2.webp',
         'quick-shot_3': 'cards/powers/quick-shot-3.webp',
-        'quick-strike_1': 'cards/powers/quick-strike-1.png',
+        'quick-strike_1': 'cards/powers/quick-strike-1.webp',
         'quick-strike_2': 'cards/powers/quick-strike-2.webp',
         'quick-strike_3': 'cards/powers/quick-strike-3.webp',
         'reenforce_1': 'cards/powers/reenforce-1.webp',
@@ -2023,6 +2286,9 @@ define([
       if (type === 'heal') {
         return _('Hero heals.');
       }
+      if (type === 'entityHealed') {
+        return _('Hero heals.');
+      }
       if (type === 'levelCleared') {
         return _('Room cleared.');
       }
@@ -2043,7 +2309,7 @@ define([
       if (type.indexOf('damage') !== -1) {
         return 'damage';
       }
-      if (type.indexOf('heal') !== -1) {
+      if (type.indexOf('heal') !== -1 || type.indexOf('Healed') !== -1) {
         return 'heal';
       }
       if (type.indexOf('free') !== -1) {

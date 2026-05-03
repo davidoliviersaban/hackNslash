@@ -193,6 +193,70 @@ final class PowerResolverTest extends TestCase
         HNS_PowerResolver::resolve('quick-shot_1', 10, ['target_entity_id' => 20], $this->state, $this->powers);
     }
 
+    public function testRangedAttackCannotHitThroughObstacle(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][2]['type'] = 'pillar';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Target is not in line of sight for quick-shot_1.');
+
+        HNS_PowerResolver::resolve('quick-shot_1', 10, ['target_entity_id' => 21], $state, $this->powers);
+    }
+
+    public function testPowerStrikeRankTwoDamagesAndPushesOrthogonalTarget(): void
+    {
+        $state = $this->state;
+        $state['entities'][20]['health'] = 5;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+
+        $result = HNS_PowerResolver::resolve('power-strike_2', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+        $this->assertSame(3, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'power-strike_2'],
+            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 20, 'damage' => 3, 'target_health' => 2],
+            ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 3],
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [20]],
+        ], $result['events']);
+    }
+
+    public function testReflexShotRankThreeHitsAtChebyshevRangeTwoAndPushesTwoTiles(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 3, 'y' => 3, 'type' => 'floor'];
+        $state['tiles'][11] = ['id' => 11, 'x' => 4, 'y' => 4, 'type' => 'floor'];
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'tile_id' => 5, 'health' => 5, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('point-blank_3', 10, ['target_entity_id' => 30], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertSame(11, $result['state']['entities'][30]['tile_id']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'point-blank_3'],
+            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 30, 'damage' => 3, 'target_health' => 2],
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 10],
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 11],
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [30]],
+        ], $result['events']);
+    }
+
+    public function testReflexShotCannotHitAtChebyshevRangeThree(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'tile_id' => 10, 'health' => 5, 'state' => 'active'];
+        $state['tiles'][10] = ['id' => 10, 'x' => 3, 'y' => 3, 'type' => 'floor'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Target is out of range for point-blank_1.');
+
+        HNS_PowerResolver::resolve('point-blank_1', 10, ['target_entity_id' => 30], $state, $this->powers);
+    }
+
     public function testThornsDamageHeroWhenAttackingOrthogonallyAdjacentMonster(): void
     {
         $state = $this->state;
@@ -269,6 +333,62 @@ final class PowerResolverTest extends TestCase
         ], $result['events']);
     }
 
+    public function testShieldedMonsterAbsorbsEveryHitFromTheFirstAttack(): void
+    {
+        $state = $this->state;
+        $state['entities'][20]['health'] = 5;
+        $state['entities'][20]['has_shield'] = true;
+
+        $result = HNS_PowerResolver::resolve('quick-strike_2', 10, ['target_entity_ids' => [20, 20, 20]], $state, $this->powers);
+
+        $this->assertSame(5, $result['state']['entities'][20]['health']);
+        $this->assertSame('active', $result['state']['entities'][20]['state']);
+        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'quick-strike_2'],
+            ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 3],
+        ], $result['events']);
+    }
+
+    public function testShieldLoadedFromDatabaseAbsorbsDamageAndBreaks(): void
+    {
+        $state = $this->state;
+        $state['entities'][20]['has_shield'] = '1';
+        $state['entities'][20]['shield_broken'] = '0';
+
+        $result = HNS_PowerResolver::resolve('strike', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'strike'],
+            ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 2],
+        ], $result['events']);
+    }
+
+    public function testShieldedTargetStillGetsPushedAndCollisionBreaksBlockingShield(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][20] = ['id' => 20, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'health' => 1, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '0'];
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'health' => 2, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '0'];
+
+        $result = HNS_PowerResolver::resolve('power-strike_2', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(0, $result['state']['entities'][20]['health']);
+        $this->assertSame('dead', $result['state']['entities'][20]['state']);
+        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertTrue($result['state']['entities'][30]['shield_broken']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'power-strike_2'],
+            ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 3],
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_KILL, 'source_entity_id' => 10, 'target_entity_id' => 20],
+            ['type' => 'shieldBroken', 'source_entity_id' => 30, 'damage_absorbed' => 1],
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [20]],
+        ], $result['events']);
+    }
+
     public function testBrokenShieldDoesNotAbsorbLaterDamage(): void
     {
         $state = $this->state;
@@ -329,6 +449,56 @@ final class PowerResolverTest extends TestCase
 
         $this->assertSame(6, $result['state']['entities'][10]['tile_id']);
         $this->assertNull($result['state']['entities'][10]['status']);
+    }
+
+    public function testSlimedHeroCannotJump(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][10]['status'] = 'slimed';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Slimed heroes cannot move with jump_1.');
+
+        HNS_PowerResolver::resolve('jump_1', 10, ['target_tile_id' => 3], $state, $this->powers);
+    }
+
+    public function testSlimedHeroCannotDashAttack(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][10]['status'] = 'slimed';
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'health' => 2, 'state' => 'active'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Slimed heroes cannot move with dash-attack_1.');
+
+        HNS_PowerResolver::resolve('dash-attack_1', 10, ['target_entity_id' => 30], $state, $this->powers);
+    }
+
+    public function testSlimedHeroCannotUseMovingWhirlwind(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][10]['status'] = 'slimed';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Slimed heroes cannot move with whirlwind_2.');
+
+        HNS_PowerResolver::resolve('whirlwind_2', 10, ['target_tile_id' => 2], $state, $this->powers);
+    }
+
+    public function testSlimedHeroCanUseWhirlwindWithoutMoving(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][10]['status'] = 'slimed';
+
+        $result = HNS_PowerResolver::resolve('whirlwind_1', 10, [], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame('slimed', $result['state']['entities'][10]['status']);
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
     }
 
     public function testDashCannotMoveDiagonally(): void
@@ -452,6 +622,18 @@ final class PowerResolverTest extends TestCase
             $state,
             $this->powers
         );
+    }
+
+    public function testVortexCannotBeCastThroughObstacle(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][2]['type'] = 'pillar';
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Selected tile is not in line of sight for pull power.');
+
+        HNS_PowerResolver::resolve('vortex', 10, ['selected_tile_id' => 3, 'target_entity_ids' => [21]], $state, $this->powers);
     }
 
     public function testVortexCannotTargetTheSameEntityMoreThanOnce(): void
@@ -588,6 +770,257 @@ final class PowerResolverTest extends TestCase
         $this->assertSame(1, $result['state']['entities'][30]['health']);
         $this->assertSame(7, $result['state']['entities'][900]['health']);
         $this->assertContains(['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 900, 'damage' => 1, 'target_health' => 7], $result['events']);
+    }
+
+    public function testLeechIgnoresShieldAndHealsOnlyOneHealth(): void
+    {
+        $state = $this->state;
+        $state['entities'][10]['health'] = 7;
+        $state['entities'][20] = ['id' => 20, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'health' => 3, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '0'];
+
+        $result = HNS_PowerResolver::resolve('leech_3', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(0, $result['state']['entities'][20]['health']);
+        $this->assertSame('dead', $result['state']['entities'][20]['state']);
+        $this->assertSame('0', $result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(8, $result['state']['entities'][10]['health']);
+        $this->assertNotContains('shieldBroken', array_column($result['events'], 'type'));
+        $this->assertContains(['type' => 'entityHealed', 'source_entity_id' => 10, 'target_entity_id' => 10, 'heal' => 1, 'target_health' => 8], $result['events']);
+    }
+
+    public function testLeechHealsAfterThornsDamage(): void
+    {
+        $state = $this->state;
+        $state['level_monster_abilities'] = ['thorns'];
+        $state['entities'][10]['health'] = 1;
+
+        $result = HNS_PowerResolver::resolve('leech_1', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][10]['health']);
+        $this->assertSame('active', $result['state']['entities'][10]['state']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'leech_1'],
+            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1],
+            ['type' => 'thornsDamage', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
+            ['type' => 'entityHealed', 'source_entity_id' => 10, 'target_entity_id' => 10, 'heal' => 1, 'target_health' => 1],
+        ], $result['events']);
+    }
+
+    public function testFireballDamagesOrthogonalAreaAndIgnoresShield(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 3, 'y' => 1, 'type' => 'floor'];
+        $state['tiles'][11] = ['id' => 11, 'x' => 3, 'y' => 2, 'type' => 'floor'];
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 11, 'health' => 2, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 7, 'health' => 2, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '0'];
+        $state['entities'][32] = ['id' => 32, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 5, 'health' => 2, 'state' => 'active'];
+        $state['entities'][33] = ['id' => 33, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 10, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('fireball_1', 10, ['target_tile_id' => 7], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertSame(1, $result['state']['entities'][31]['health']);
+        $this->assertSame(1, $result['state']['entities'][32]['health']);
+        $this->assertSame(1, $result['state']['entities'][33]['health']);
+        $this->assertSame('0', $result['state']['entities'][31]['shield_broken']);
+        $this->assertNotContains('shieldBroken', array_column($result['events'], 'type'));
+    }
+
+    public function testFireballCanUseClickedMonsterTile(): void
+    {
+        $state = $this->state;
+        $state['entities'][20]['health'] = 2;
+
+        $result = HNS_PowerResolver::resolve('fireball_1', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
+    }
+
+    public function testHealCanTargetPartnerWithinRangeAndIsCapped(): void
+    {
+        $state = $this->state;
+        $state['entities'][11] = ['id' => 11, 'type' => 'hero', 'owner' => 2, 'tile_id' => 4, 'health' => 8, 'state' => 'active'];
+        $state['players'] = [1 => ['id' => 1, 'max_health' => 10], 2 => ['id' => 2, 'max_health' => 10]];
+
+        $result = HNS_PowerResolver::resolve('heal_3', 10, ['target_entity_id' => 11], $state, $this->powers);
+
+        $this->assertSame(10, $result['state']['entities'][11]['health']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'heal_3'],
+            ['type' => 'entityHealed', 'source_entity_id' => 10, 'target_entity_id' => 11, 'heal' => 2, 'target_health' => 10],
+        ], $result['events']);
+    }
+
+    public function testDashAttackRankTwoMovesAndHitsOneTargetPerUse(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'health' => 2, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('dash-attack_2', 10, ['target_entity_id' => 30], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(2, $result['state']['entities'][31]['health']);
+        $this->assertContains(['type' => HNS_FreeActionEngine::EVENT_AFTER_DASH_ATTACK, 'source_entity_id' => 10, 'power_key' => 'dash-attack_2'], $result['events']);
+    }
+
+    public function testDashAttackRankThreeDealsTwoDamageOncePerUse(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'health' => 3, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 3, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('dash-attack_3', 10, ['target_entity_id' => 30], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(3, $result['state']['entities'][31]['health']);
+    }
+
+    public function testWhirlwindRankOneDamagesAroundCurrentHeroTileWithoutMoving(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'health' => 2, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 5, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('whirlwind_1', 10, [], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(2, $result['state']['entities'][31]['health']);
+    }
+
+    public function testWhirlwindRankOneDefaultsZeroTargetTileToCurrentHeroTile(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+
+        $result = HNS_PowerResolver::resolve('whirlwind_1', 10, ['target_tile_id' => 0, 'selected_tile_id' => 0], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
+    }
+
+    public function testWhirlwindRankTwoMovesThenDamagesAroundLandingTile(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 7, 'health' => 2, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 5, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('whirlwind_2', 10, ['target_tile_id' => 4], $state, $this->powers);
+
+        $this->assertSame(4, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(1, $result['state']['entities'][31]['health']);
+    }
+
+    public function testProjectionRankOnePushesOrthogonalTargetWithoutDamage(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 3, 'y' => 0, 'type' => 'floor'];
+        $state['tiles'][11] = ['id' => 11, 'x' => 4, 'y' => 0, 'type' => 'floor'];
+        $state['entities'][20]['health'] = 2;
+
+        $result = HNS_PowerResolver::resolve('grab_1', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+        $this->assertSame(11, $result['state']['entities'][20]['tile_id']);
+    }
+
+    public function testProjectionRankTwoCanPushDiagonalTarget(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 2, 'y' => 2, 'type' => 'floor'];
+        $state['tiles'][11] = ['id' => 11, 'x' => 3, 'y' => 3, 'type' => 'floor'];
+        $state['entities'][22] = ['id' => 22, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('grab_2', 10, ['target_entity_id' => 22], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][22]['health']);
+        $this->assertSame(11, $result['state']['entities'][22]['tile_id']);
+    }
+
+    public function testProjectionRankThreePushesAndDamages(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 3, 'y' => 0, 'type' => 'floor'];
+        $state['tiles'][11] = ['id' => 11, 'x' => 4, 'y' => 0, 'type' => 'floor'];
+        $state['entities'][20]['health'] = 3;
+
+        $result = HNS_PowerResolver::resolve('grab_3', 10, ['target_entity_id' => 20], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+        $this->assertSame(11, $result['state']['entities'][20]['tile_id']);
+    }
+
+    public function testJumpIgnoresObstacles(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][2]['type'] = 'wall';
+
+        $result = HNS_PowerResolver::resolve('jump_1', 10, ['target_tile_id' => 3], $state, $this->powers);
+
+        $this->assertSame(3, $result['state']['entities'][10]['tile_id']);
+    }
+
+    public function testJumpRankOneCannotLandOnMonster(): void
+    {
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Jump target is occupied for jump_1.');
+
+        HNS_PowerResolver::resolve('jump_1', 10, ['target_tile_id' => 2], $this->state, $this->powers);
+    }
+
+    public function testJumpRankTwoPushesMonsterOnLandingTile(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 2, 'y' => 0, 'type' => 'floor'];
+        $state['entities'][20]['health'] = 2;
+
+        $result = HNS_PowerResolver::resolve('jump_2', 10, ['target_tile_id' => 2], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(3, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+    }
+
+    public function testJumpRankThreePushesAndDamagesMonsterOnLandingTile(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['tiles'][10] = ['id' => 10, 'x' => 2, 'y' => 0, 'type' => 'floor'];
+        $state['entities'][20]['health'] = 2;
+
+        $result = HNS_PowerResolver::resolve('jump_3', 10, ['target_tile_id' => 2], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(3, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
+    }
+
+    public function testJumpMovesMonsterToAdjacentFallbackAndDamagesWhenPushTileIsBlocked(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][20]['health'] = 2;
+        $state['tiles'][1]['type'] = 'wall';
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'big', 'tile_id' => 3, 'health' => 4, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('jump_2', 10, ['target_tile_id' => 2], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][10]['tile_id']);
+        $this->assertSame(4, $result['state']['entities'][20]['tile_id']);
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
     }
 
     public function testKamikazeExplodesWhenKilled(): void

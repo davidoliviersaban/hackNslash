@@ -8,6 +8,7 @@ final class HNS_FreeActionEngine
     public const EVENT_AFTER_KILL = 'afterKill';
     public const EVENT_AFTER_SHIELD_BREAK = 'afterShieldBreak';
     public const EVENT_AFTER_CARD_PLAYED = 'afterCardPlayed';
+    public const EVENT_AFTER_DASH_ATTACK = 'afterDashAttack';
     public const EVENT_ENTITY_DAMAGED = 'entityDamaged';
     public const EVENT_AFTER_TRAP = 'afterTrap';
 

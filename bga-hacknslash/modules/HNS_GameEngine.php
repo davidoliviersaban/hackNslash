@@ -12,9 +12,9 @@ final class HNS_GameEngine
     {
         if ($levelNumber === HNS_BOSS_LEVEL) {
             $layout = HNS_LevelGenerator::generate(7, $seed);
+            $layout = self::forceCentralBossFloor($layout);
             $tiles = self::tilesFromLayout($layout);
-            $bossStart = $layout['monster_starts'][0] ?? null;
-            $bossTileId = $bossStart === null ? self::firstWalkableTileId($tiles) : self::tileIdFor((int) $bossStart['x'], (int) $bossStart['y']);
+            $bossTileId = self::tileIdFor((int) floor($layout['grid_size'] / 2), (int) floor($layout['grid_size'] / 2));
 
             return [
                 'level' => $levelNumber,
@@ -72,6 +72,19 @@ final class HNS_GameEngine
                 1 => ['health' => 8],
             ],
         ];
+    }
+
+    /** @param array<string, mixed> $layout */
+    private static function forceCentralBossFloor(array $layout): array
+    {
+        $center = (int) floor((int) $layout['grid_size'] / 2);
+        foreach ($layout['terrain'] as &$terrain) {
+            if (abs((int) $terrain['x'] - $center) <= 1 && abs((int) $terrain['y'] - $center) <= 1) {
+                $terrain['terrain'] = 'floor';
+            }
+        }
+
+        return $layout;
     }
 
     /**
@@ -258,7 +271,7 @@ final class HNS_GameEngine
         }
 
         $state['reward_offer'] = HNS_LevelReward::drawOfferForPlayer($powers, $powerDeck, array_values($state['player_powers'] ?? []));
-        $state['reward_upgrades'] = HNS_LevelReward::drawUpgradeOfferForPlayer($powers, array_values($state['player_powers'] ?? []));
+        $state['reward_upgrades'] = HNS_LevelReward::drawUpgradeOfferForPlayer($powers, $powerDeck, array_values($state['player_powers'] ?? []));
 
         return $state;
     }

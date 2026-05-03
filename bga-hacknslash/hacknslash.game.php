@@ -174,6 +174,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->persistEngineState($result['state']);
         $this->notifyEngineEvents($result['events'] ?? []);
         if (!empty($result['state']['game_won'])) {
+            $this->scoreCooperativeVictory();
             $this->gamestate->nextState('gameEnd');
             return;
         }
@@ -212,14 +213,16 @@ class Hacknslash extends \Bga\GameFramework\Table
         $level = (int) $this->getGameStateValue('current_level');
         $playerId = (int) $this->getActivePlayerId();
         $playerPowers = array_values($this->getCollectionFromDb("SELECT power_slot slot, power_key FROM player_power WHERE player_id = $playerId ORDER BY power_slot"));
-        $rewardOffer = HNS_LevelReward::drawOfferForPlayer($this->bonus_cards, array_keys($this->bonus_cards), $playerPowers);
-        $rewardUpgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->bonus_cards, $playerPowers);
+        $remainingPowerDeck = $this->remainingPowerDeckKeys();
+        $rewardOffer = HNS_LevelReward::drawOfferForPlayer($this->bonus_cards, $remainingPowerDeck, $playerPowers);
+        $rewardUpgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->bonus_cards, $remainingPowerDeck, $playerPowers);
         $this->saveCurrentRewardOffer($rewardOffer);
         $this->saveCurrentRewardUpgrades($rewardUpgrades);
         $this->notifyEngineEvents([['type' => 'levelCleared', 'level' => $level, 'reward_offer' => $rewardOffer, 'reward_upgrades' => $rewardUpgrades]]);
 
         if ($level >= HNS_BOSS_LEVEL) {
             $this->notifyEngineEvents([['type' => 'gameWon']]);
+            $this->scoreCooperativeVictory();
             $this->gamestate->nextState('gameEnd');
             return;
         }
@@ -311,7 +314,7 @@ class Hacknslash extends \Bga\GameFramework\Table
 
         $events = $this->resolvePowerForActivePlayer($powerKey, $payload);
 
-        $cooldown = (int) ($this->bonus_cards[$powerKey]['cooldown'] ?? 0);
+        $cooldown = $this->cooldownAfterPowerUse($powerKey, $isFree);
         $this->DbQuery("UPDATE player_power SET power_cooldown = $cooldown WHERE player_power_id = $powerId");
         if ($isFree) {
             $this->consumeFreePower($powerKey, $events, $cooldown);
@@ -323,17 +326,24 @@ class Hacknslash extends \Bga\GameFramework\Table
         $shouldEndTurn = $this->shouldEndActivePlayerTurn($playerId);
         $bossPhaseStarted = $this->hasBossPhaseStarted($events);
         $gameWon = $this->hasGameWon($events);
+        $levelCleared = $this->isCurrentLevelCleared();
         if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon) {
             $this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey);
         }
 
         if ($gameWon) {
+            $this->scoreCooperativeVictory();
             $this->gamestate->nextState('gameEnd');
             return;
         }
 
         if ($bossPhaseStarted) {
             $this->gamestate->nextState('roundEnd');
+            return;
+        }
+
+        if ($levelCleared) {
+            $this->gamestate->nextState('levelEndCheck');
             return;
         }
 
@@ -360,17 +370,24 @@ class Hacknslash extends \Bga\GameFramework\Table
         $shouldEndTurn = $this->shouldEndActivePlayerTurn($playerId);
         $bossPhaseStarted = $this->hasBossPhaseStarted($events);
         $gameWon = $this->hasGameWon($events);
+        $levelCleared = $this->isCurrentLevelCleared();
         if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon) {
             $this->notifyPlayerActionState($playerId, 0, 0);
         }
 
         if ($gameWon) {
+            $this->scoreCooperativeVictory();
             $this->gamestate->nextState('gameEnd');
             return;
         }
 
         if ($bossPhaseStarted) {
             $this->gamestate->nextState('roundEnd');
+            return;
+        }
+
+        if ($levelCleared) {
+            $this->gamestate->nextState('levelEndCheck');
             return;
         }
 
@@ -387,6 +404,16 @@ class Hacknslash extends \Bga\GameFramework\Table
         $actionPoints = max(0, (int) $this->getUniqueValueFromDB("SELECT player_action_points FROM player WHERE player_id = $playerId") - 1);
         $mainActionAvailable = $actionPoints > 0 ? 1 : 0;
         $this->DbQuery("UPDATE player SET player_action_points = $actionPoints, player_main_action_available = $mainActionAvailable, player_free_move_available = 0 WHERE player_id = $playerId");
+    }
+
+    private function cooldownAfterPowerUse(string $powerKey, bool $isFree): int
+    {
+        $power = $this->bonus_cards[$powerKey] ?? [];
+        if (($power['effect'] ?? null) === 'dash_attack' && (int) ($power['plays'] ?? 1) > 1 && !$isFree) {
+            return 0;
+        }
+
+        return (int) ($power['cooldown'] ?? 0);
     }
 
     private function isFreePowerAvailable(string $powerKey, int $cooldown, int $playerId): bool
@@ -486,6 +513,18 @@ class Hacknslash extends \Bga\GameFramework\Table
         return false;
     }
 
+    private function scoreCooperativeVictory(): void
+    {
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
+            $this->bga->playerScore->set((int) $player['id'], 1);
+        }
+    }
+
+    private function isCurrentLevelCleared(): bool
+    {
+        return HNS_GameEngine::isLevelCleared($this->loadEngineState());
+    }
+
     private function isPlayerFreeActionAvailable(int $playerId): bool
     {
         $powers = $this->getCollectionFromDb("SELECT power_key, power_cooldown cooldown FROM player_power WHERE player_id = $playerId");
@@ -497,6 +536,65 @@ class Hacknslash extends \Bga\GameFramework\Table
         }
 
         return false;
+    }
+
+    /** @return list<string> */
+    private function remainingPowerDeckKeys(): array
+    {
+        $this->ensureMissingRewardCardsInDeck();
+        $cards = $this->cards->getCardsInLocation('deck');
+        $powerKeys = [];
+        foreach ($cards as $card) {
+            $powerKey = $this->powerKeyForTypeArg((int) ($card['type_arg'] ?? 0));
+            if ($powerKey !== null) {
+                $powerKeys[] = $powerKey;
+            }
+        }
+
+        shuffle($powerKeys);
+        return $powerKeys;
+    }
+
+    private function ensureMissingRewardCardsInDeck(): void
+    {
+        $existingPowerKeys = [];
+        foreach (['deck', 'discard'] as $location) {
+            foreach ($this->cards->getCardsInLocation($location) as $card) {
+                $powerKey = $this->powerKeyForTypeArg((int) ($card['type_arg'] ?? 0));
+                if ($powerKey !== null) {
+                    $existingPowerKeys[] = $powerKey;
+                }
+            }
+        }
+
+        foreach ($this->getPlayerPowers() as $playerPower) {
+            $existingPowerKeys[] = (string) ($playerPower['power_key'] ?? '');
+        }
+
+        $existingPowerKeys = array_values(array_unique($existingPowerKeys));
+        foreach (array_values(array_keys($this->bonus_cards)) as $index => $powerKey) {
+            if ((int) ($this->bonus_cards[$powerKey]['rank'] ?? 0) < 1 || in_array($powerKey, $existingPowerKeys, true)) {
+                continue;
+            }
+
+            $this->cards->createCards([['type' => 'bonus', 'type_arg' => $index + 1, 'nbr' => 1]], 'deck');
+            $existingPowerKeys[] = $powerKey;
+        }
+    }
+
+    private function removePowerFromDeck(string $powerKey): void
+    {
+        foreach ($this->cards->getCardsInLocation('deck') as $card) {
+            if ($this->powerKeyForTypeArg((int) ($card['type_arg'] ?? 0)) !== $powerKey) {
+                continue;
+            }
+
+            $cardId = (int) ($card['id'] ?? 0);
+            if ($cardId > 0) {
+                $this->cards->moveCard($cardId, 'discard');
+            }
+            return;
+        }
     }
 
     /** @return list<string> */
@@ -626,6 +724,8 @@ class Hacknslash extends \Bga\GameFramework\Table
             }
         }
 
+        $this->removePowerFromDeck($chosenPowerKey);
+
         $this->saveCurrentRewardOffer([]);
         $this->saveCurrentRewardUpgrades([]);
         $this->notifyAllPlayers('rewardChosen', clienttranslate('${player_name} chooses a reward'), [
@@ -688,6 +788,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->setupInitialBoard($nextLevel);
         $this->moveHeroesToLevelStarts($nextLevel);
         $this->deleteMonstersOutsideLevel($nextLevel);
+        $this->DbQuery('UPDATE player_power SET power_cooldown = 0');
         $this->resetRoundFlags();
         $this->notifyEngineEvents([[
             'type' => 'levelStarted',
@@ -696,6 +797,7 @@ class Hacknslash extends \Bga\GameFramework\Table
             'tiles' => $this->getTilesForLevel($nextLevel),
             'entities' => $this->getEntities(),
             'players' => $this->getPlayersWithState(),
+            'player_powers' => $this->getPlayerPowers(),
             'level_monster_abilities' => $this->getLevelMonsterAbilities(),
         ]]);
         $this->gamestate->nextState('nextLevel');

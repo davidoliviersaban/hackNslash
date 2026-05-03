@@ -6,3 +6,9 @@ Dash I,Free after any card. Move orthogonally up to 2 tiles. Cannot target an ob
 Dash II,Free after any card. Move orthogonally up to 2 tiles. Cannot target an obstacle. Cooldown 2.,0,0,1-2 orthogonal,0,0,0,0,Free after any card,2
 Dash III,Free after any card. Move orthogonally up to 2 tiles. Cannot target an obstacle. Cooldown 1.,0,0,1-2 orthogonal,0,0,0,0,Free after any card,3
 Vortex I,Ranged pull. Select a tile at range 2 with diagonals included then pull up to 2 monsters at distance 1 from it. Cooldown 2.,2,0,0,0-2 diagonal,0,1,0,Triggers after push or pull,1
+Power Strike I,Free after shield break. Deals 3 damage at orthogonal range 1. Cooldown 2.,1,3,0,0-1 orthogonal,0,0,0,Free after shield break,1
+Power Strike II,Free after shield break. Deals 3 damage at orthogonal range 1 then pushes 1 tile. Cooldown 2.,1,3,0,0-1 orthogonal,1,0,0,Free after shield break,2
+Power Strike III,Free after shield break. Deals 4 damage at orthogonal range 1 then pushes 1 tile. Cooldown 2.,1,4,0,0-1 orthogonal,1,0,0,Free after shield break,3
+Point Blank I,Free after push. Deals 1 ranged damage at Chebyshev range 1 to 2 then pushes 1 tile. Cooldown 2.,1,1,0,1-2 diagonal,1,0,0,Free after push,1
+Point Blank II,Free after push. Deals 2 ranged damage at Chebyshev range 1 to 2 then pushes 1 tile. Cooldown 2.,1,2,0,1-2 diagonal,1,0,0,Free after push,2
+Point Blank III,Free after push. Deals 3 ranged damage at Chebyshev range 1 to 2 then pushes 2 tiles. Cooldown 2.,1,3,0,1-2 diagonal,2,0,0,Free after push,3

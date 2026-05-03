@@ -88,14 +88,17 @@ final class HNS_MonsterAi
         $range = [(int) ($monsterMaterial['min_range'] ?? ($maxRange > 0 ? 1 : 0)), $maxRange];
 
         if (($monsterMaterial['range_metric'] ?? 'orthogonal') === 'front_arc') {
-            return self::isTileInFrontArc($monsterTile, $heroTile, self::frontDirection($monsterTile, $heroTile));
+            return self::isTileInFrontArc($monsterTile, $heroTile, self::frontDirection($monsterTile, $heroTile))
+                && HNS_BoardRules::hasLineOfSight($monsterTile, $heroTile, $state['tiles']);
         }
 
         if (($monsterMaterial['range_metric'] ?? 'orthogonal') === 'chebyshev') {
-            return HNS_BoardRules::isInDiagonalRange($monsterTile, $heroTile, $range);
+            return HNS_BoardRules::isInDiagonalRange($monsterTile, $heroTile, $range)
+                && HNS_BoardRules::hasLineOfSight($monsterTile, $heroTile, $state['tiles']);
         }
 
-        return HNS_BoardRules::isInOrthogonalRange($monsterTile, $heroTile, $range);
+        return HNS_BoardRules::isInOrthogonalRange($monsterTile, $heroTile, $range)
+            && HNS_BoardRules::hasLineOfSight($monsterTile, $heroTile, $state['tiles']);
     }
 
     /**
@@ -280,6 +283,9 @@ final class HNS_MonsterAi
             }
 
             if (!self::isTileInFrontArc($monsterTile, self::entityTile((int) $entityId, $state), $direction)) {
+                continue;
+            }
+            if (!HNS_BoardRules::hasLineOfSight($monsterTile, self::entityTile((int) $entityId, $state), $state['tiles'])) {
                 continue;
             }
 

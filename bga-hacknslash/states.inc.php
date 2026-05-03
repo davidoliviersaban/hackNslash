@@ -27,6 +27,7 @@ $machinestates = [
             'resolveAction' => 20,
             'endTurn' => 70,
             'roundEnd' => 30,
+            'levelEndCheck' => 60,
             'gameEnd' => 99,
         ],
     ],

@@ -75,4 +75,24 @@ final class LevelGeneratorTest extends TestCase
 
         HNS_LevelGenerator::generate(6, 1);
     }
+
+    public function testBossLevelUsesCentralThreeByThreeFloorArea(): void
+    {
+        require_once dirname(__DIR__) . '/modules/material/constants.inc.php';
+        require_once dirname(__DIR__) . '/modules/HNS_BoardRules.php';
+        require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
+        require_once dirname(__DIR__) . '/modules/HNS_BossEngine.php';
+        require_once dirname(__DIR__) . '/modules/HNS_GameEngine.php';
+
+        $state = HNS_GameEngine::createLevel(HNS_BOSS_LEVEL, 1234, [], []);
+        $center = (int) floor($state['layout']['grid_size'] / 2);
+
+        foreach ($state['tiles'] as $tile) {
+            if (abs((int) $tile['x'] - $center) <= 1 && abs((int) $tile['y'] - $center) <= 1) {
+                $this->assertSame('floor', $tile['type']);
+            }
+        }
+
+        $this->assertSame(($center * 100) + $center + 1, $state['entities'][900]['tile_id']);
+    }
 }

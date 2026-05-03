@@ -4,7 +4,8 @@ trait HNS_Board
 {
     protected function getTilesForLevel(int $level): array
     {
-        return $this->getCollectionFromDb("SELECT tile_id id, tile_x x, tile_y y, tile_type type, tile_state state, tile_level level FROM tile WHERE tile_level = $level");
+        $this->ensureTileSpawnLabelColumn();
+        return $this->getCollectionFromDb("SELECT tile_id id, tile_x x, tile_y y, tile_type type, tile_state state, tile_level level, tile_spawn_label spawn_label FROM tile WHERE tile_level = $level");
     }
 
     protected function getEntities(): array
@@ -168,5 +169,20 @@ trait HNS_Board
     {
         $level = (int) $this->getGameStateValue('current_level');
         $this->DbQuery("DELETE e FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_type IN ('monster', 'boss') AND t.tile_level = $level AND (e.entity_state = 'dead' OR e.entity_health <= 0)");
+    }
+
+    protected function ensureTileSpawnLabelColumn(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $hasColumn = $this->getObjectFromDB("SHOW COLUMNS FROM tile LIKE 'tile_spawn_label'");
+        if (!$hasColumn) {
+            $this->DbQuery("ALTER TABLE tile ADD tile_spawn_label VARCHAR(8) DEFAULT NULL AFTER tile_level");
+        }
+
+        $done = true;
     }
 }

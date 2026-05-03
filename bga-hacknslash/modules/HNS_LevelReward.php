@@ -55,25 +55,38 @@ final class HNS_LevelReward
 
     /**
      * @param array<string, array<string, mixed>> $powers
+     * @param array<int, string> $deckPowerKeys
      * @param array<int, array{slot:int, power_key:string}> $playerPowers
      * @return array<int, array{slot:int, from:string, to:string}>
      */
-    public static function drawUpgradeOfferForPlayer(array $powers, array $playerPowers): array
+    public static function drawUpgradeOfferForPlayer(array $powers, array $deckPowerKeys, array $playerPowers, int $count = 3): array
     {
         $ownedPowerKeys = array_map(static fn (array $power): string => (string) $power['power_key'], $playerPowers);
         $upgrades = [];
-        foreach ($playerPowers as $playerPower) {
-            $currentPowerKey = (string) $playerPower['power_key'];
-            $upgradePowerKey = $powers[$currentPowerKey]['upgrades_to'] ?? null;
-            if (!is_string($upgradePowerKey) || in_array($upgradePowerKey, $ownedPowerKeys, true)) {
+
+        foreach ($deckPowerKeys as $deckPowerKey) {
+            if (in_array($deckPowerKey, $ownedPowerKeys, true)) {
                 continue;
             }
 
-            $upgrades[] = [
-                'slot' => (int) $playerPower['slot'],
-                'from' => $currentPowerKey,
-                'to' => $upgradePowerKey,
-            ];
+            foreach ($playerPowers as $playerPower) {
+                $currentPowerKey = (string) $playerPower['power_key'];
+                if (($powers[$currentPowerKey]['upgrades_to'] ?? null) !== $deckPowerKey) {
+                    continue;
+                }
+
+                $upgrades[] = [
+                    'slot' => (int) $playerPower['slot'],
+                    'from' => $currentPowerKey,
+                    'to' => $deckPowerKey,
+                ];
+
+                if (count($upgrades) === $count) {
+                    return $upgrades;
+                }
+
+                break;
+            }
         }
 
         return $upgrades;

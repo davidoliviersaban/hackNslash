@@ -10,7 +10,7 @@ final class PowerMaterialTest extends TestCase
     {
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
 
-        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'vortex', 'vortex_2', 'vortex_3', 'quick-strike_1', 'quick-strike_2', 'quick-strike_3', 'quick-shot_1', 'quick-shot_2', 'quick-shot_3'], array_keys($bonus_cards));
+        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'dash-attack_1', 'dash-attack_2', 'dash-attack_3', 'fireball_1', 'fireball_2', 'fireball_3', 'grab_1', 'grab_2', 'grab_3', 'heal_1', 'heal_2', 'heal_3', 'jump_1', 'jump_2', 'jump_3', 'leech_1', 'leech_2', 'leech_3', 'vortex', 'vortex_2', 'vortex_3', 'whirlwind_1', 'whirlwind_2', 'whirlwind_3', 'power-strike_1', 'power-strike_2', 'power-strike_3', 'quick-strike_1', 'quick-strike_2', 'quick-strike_3', 'quick-shot_1', 'quick-shot_2', 'quick-shot_3', 'point-blank_1', 'point-blank_2', 'point-blank_3'], array_keys($bonus_cards));
     }
 
     public function testAttackPowerDefinition(): void
@@ -104,6 +104,68 @@ final class PowerMaterialTest extends TestCase
         $this->assertNull($bonus_cards['vortex_3']['upgrades_to']);
     }
 
+    public function testNewPowerDefinitions(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $this->assertSame('Dash Attack', $bonus_cards['dash-attack_1']['name']);
+        $this->assertSame('dash_attack', $bonus_cards['dash-attack_1']['effect']);
+        $this->assertSame([1, 1], $bonus_cards['dash-attack_1']['range']);
+        $this->assertSame(1, $bonus_cards['dash-attack_1']['targets']);
+        $this->assertSame(1, $bonus_cards['dash-attack_1']['damage']);
+        $this->assertSame([1, 2], $bonus_cards['dash-attack_2']['range']);
+        $this->assertSame(1, $bonus_cards['dash-attack_2']['targets']);
+        $this->assertSame(2, $bonus_cards['dash-attack_2']['plays']);
+        $this->assertSame(['afterDashAttack'], $bonus_cards['dash-attack_2']['free_triggers']);
+        $this->assertSame(1, $bonus_cards['dash-attack_2']['damage']);
+        $this->assertSame(1, $bonus_cards['dash-attack_3']['targets']);
+        $this->assertSame(2, $bonus_cards['dash-attack_3']['plays']);
+        $this->assertSame(2, $bonus_cards['dash-attack_3']['damage']);
+
+        $this->assertSame('area_attack', $bonus_cards['fireball_1']['effect']);
+        $this->assertSame('orthogonal', $bonus_cards['fireball_1']['area_metric']);
+        $this->assertTrue($bonus_cards['fireball_1']['ignores_shield']);
+
+        $this->assertSame('Projection', $bonus_cards['grab_1']['name']);
+        $this->assertSame('attack', $bonus_cards['grab_1']['effect']);
+        $this->assertSame(0, $bonus_cards['grab_1']['damage']);
+        $this->assertSame(3, $bonus_cards['grab_1']['push_distance']);
+        $this->assertSame('orthogonal', $bonus_cards['grab_1']['range_metric']);
+        $this->assertSame('chebyshev', $bonus_cards['grab_2']['range_metric']);
+        $this->assertSame(1, $bonus_cards['grab_3']['damage']);
+
+        $this->assertSame('heal', $bonus_cards['heal_1']['effect']);
+        $this->assertSame(1, $bonus_cards['heal_1']['heal']);
+        $this->assertSame(2, $bonus_cards['heal_2']['heal']);
+        $this->assertSame(4, $bonus_cards['heal_3']['heal']);
+        $this->assertSame([0, 2], $bonus_cards['heal_1']['range']);
+        $this->assertSame(['afterKill'], $bonus_cards['heal_1']['free_triggers']);
+
+        $this->assertSame('jump', $bonus_cards['jump_1']['effect']);
+        $this->assertSame([1, 2], $bonus_cards['jump_1']['distance']);
+        $this->assertSame([1, 2], $bonus_cards['jump_2']['distance']);
+        $this->assertSame([1, 3], $bonus_cards['jump_3']['distance']);
+        $this->assertSame(0, $bonus_cards['jump_1']['push_distance']);
+        $this->assertSame(1, $bonus_cards['jump_2']['push_distance']);
+        $this->assertSame(1, $bonus_cards['jump_3']['damage']);
+
+        $this->assertSame('attack', $bonus_cards['leech_1']['effect']);
+        $this->assertTrue($bonus_cards['leech_1']['ignores_shield']);
+        $this->assertSame(1, $bonus_cards['leech_1']['heal_on_damage']);
+        $this->assertSame(1, $bonus_cards['leech_1']['damage']);
+        $this->assertSame(2, $bonus_cards['leech_2']['damage']);
+        $this->assertSame(3, $bonus_cards['leech_3']['damage']);
+
+        $this->assertSame('move_area_attack', $bonus_cards['whirlwind_1']['effect']);
+        $this->assertSame(1, $bonus_cards['whirlwind_1']['damage']);
+        $this->assertSame(1, $bonus_cards['whirlwind_2']['damage']);
+        $this->assertSame(2, $bonus_cards['whirlwind_3']['damage']);
+        $this->assertSame([0, 0], $bonus_cards['whirlwind_1']['distance']);
+        $this->assertSame([0, 1], $bonus_cards['whirlwind_2']['distance']);
+        $this->assertSame([0, 1], $bonus_cards['whirlwind_1']['area']);
+        $this->assertSame('chebyshev', $bonus_cards['whirlwind_1']['area_metric']);
+    }
+
     public function testQuickStrikePowerDefinition(): void
     {
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
@@ -129,6 +191,29 @@ final class PowerMaterialTest extends TestCase
         $this->assertNull($bonus_cards['quick-strike_3']['upgrades_to']);
     }
 
+    public function testPowerStrikePowerDefinition(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $this->assertSame('Power Strike', $bonus_cards['power-strike_1']['name']);
+        $this->assertSame('attack', $bonus_cards['power-strike_1']['effect']);
+        $this->assertSame(1, $bonus_cards['power-strike_1']['targets']);
+        $this->assertSame(3, $bonus_cards['power-strike_1']['damage']);
+        $this->assertSame([0, 1], $bonus_cards['power-strike_1']['range']);
+        $this->assertSame('orthogonal', $bonus_cards['power-strike_1']['range_metric']);
+        $this->assertSame(0, $bonus_cards['power-strike_1']['push_distance']);
+        $this->assertSame(['shieldBroken'], $bonus_cards['power-strike_1']['free_triggers']);
+        $this->assertSame('power-strike_2', $bonus_cards['power-strike_1']['upgrades_to']);
+        $this->assertSame(3, $bonus_cards['power-strike_2']['damage']);
+        $this->assertSame(1, $bonus_cards['power-strike_2']['push_distance']);
+        $this->assertSame(['shieldBroken'], $bonus_cards['power-strike_2']['free_triggers']);
+        $this->assertSame('power-strike_3', $bonus_cards['power-strike_2']['upgrades_to']);
+        $this->assertSame(4, $bonus_cards['power-strike_3']['damage']);
+        $this->assertSame(1, $bonus_cards['power-strike_3']['push_distance']);
+        $this->assertSame(['shieldBroken'], $bonus_cards['power-strike_3']['free_triggers']);
+        $this->assertNull($bonus_cards['power-strike_3']['upgrades_to']);
+    }
+
     public function testQuickShotPowerDefinition(): void
     {
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
@@ -152,5 +237,28 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame(2, $bonus_cards['quick-shot_3']['cooldown']);
         $this->assertSame(['afterMove'], $bonus_cards['quick-shot_3']['free_triggers']);
         $this->assertNull($bonus_cards['quick-shot_3']['upgrades_to']);
+    }
+
+    public function testPointBlankPowerDefinition(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $this->assertSame('Point Blank', $bonus_cards['point-blank_1']['name']);
+        $this->assertSame('attack', $bonus_cards['point-blank_1']['effect']);
+        $this->assertSame(1, $bonus_cards['point-blank_1']['targets']);
+        $this->assertSame(1, $bonus_cards['point-blank_1']['damage']);
+        $this->assertSame([1, 2], $bonus_cards['point-blank_1']['range']);
+        $this->assertSame('chebyshev', $bonus_cards['point-blank_1']['range_metric']);
+        $this->assertSame(1, $bonus_cards['point-blank_1']['push_distance']);
+        $this->assertSame(['afterPushOrPull'], $bonus_cards['point-blank_1']['free_triggers']);
+        $this->assertSame('point-blank_2', $bonus_cards['point-blank_1']['upgrades_to']);
+        $this->assertSame(2, $bonus_cards['point-blank_2']['damage']);
+        $this->assertSame(1, $bonus_cards['point-blank_2']['push_distance']);
+        $this->assertSame(['afterPushOrPull'], $bonus_cards['point-blank_2']['free_triggers']);
+        $this->assertSame('point-blank_3', $bonus_cards['point-blank_2']['upgrades_to']);
+        $this->assertSame(3, $bonus_cards['point-blank_3']['damage']);
+        $this->assertSame(2, $bonus_cards['point-blank_3']['push_distance']);
+        $this->assertSame(['afterPushOrPull'], $bonus_cards['point-blank_3']['free_triggers']);
+        $this->assertNull($bonus_cards['point-blank_3']['upgrades_to']);
     }
 }

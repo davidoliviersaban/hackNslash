@@ -190,6 +190,28 @@
   pointer-events: none;
 }
 
+.hns_spawn_label {
+  position: absolute;
+  left: 6px;
+  top: 6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f8d78a;
+  color: #1c1410;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(28, 20, 16, 0.9), 0 2px 8px rgba(0, 0, 0, 0.65);
+  pointer-events: none;
+}
+
+.hns_spawn_label:empty {
+  display: none;
+}
+
 .hns_entity_attacking {
   animation: hns_entity_attack_lunge 460ms cubic-bezier(0.2, 0.9, 0.24, 1.18);
   z-index: 8;
@@ -246,6 +268,33 @@
   height: 46px;
   max-width: none;
   transform: translate(-6px, -6px);
+}
+
+.hns_entity_shielded {
+  filter: drop-shadow(0 0 5px rgba(82, 169, 255, 0.95)) drop-shadow(0 0 10px rgba(82, 169, 255, 0.72));
+}
+
+.hns_entity_shielded:hover,
+.hns_entity_shielded.hns_selected {
+  filter: brightness(1.15) drop-shadow(0 0 5px rgba(82, 169, 255, 0.95)) drop-shadow(0 0 10px rgba(82, 169, 255, 0.72));
+}
+
+.hns_entity_thorns {
+  filter: drop-shadow(0 0 5px rgba(128, 76, 36, 0.98)) drop-shadow(0 0 11px rgba(91, 49, 24, 0.78));
+}
+
+.hns_entity_thorns:hover,
+.hns_entity_thorns.hns_selected {
+  filter: brightness(1.15) drop-shadow(0 0 5px rgba(128, 76, 36, 0.98)) drop-shadow(0 0 11px rgba(91, 49, 24, 0.78));
+}
+
+.hns_entity_shielded.hns_entity_thorns {
+  filter: drop-shadow(0 0 5px rgba(82, 169, 255, 0.95)) drop-shadow(0 0 10px rgba(82, 169, 255, 0.72)) drop-shadow(0 0 5px rgba(128, 76, 36, 0.98));
+}
+
+.hns_entity_shielded.hns_entity_thorns:hover,
+.hns_entity_shielded.hns_entity_thorns.hns_selected {
+  filter: brightness(1.15) drop-shadow(0 0 5px rgba(82, 169, 255, 0.95)) drop-shadow(0 0 10px rgba(82, 169, 255, 0.72)) drop-shadow(0 0 5px rgba(128, 76, 36, 0.98));
 }
 
 .hns_entity_boss {
@@ -307,6 +356,38 @@
   font-weight: 700;
   line-height: 18px;
   text-align: center;
+}
+
+.hns_entity_effects {
+  position: absolute;
+  right: 8px;
+  bottom: -8px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.hns_entity .hns_entity_shield_icon,
+.hns_entity .hns_entity_thorns_icon {
+  width: 18px;
+  height: 18px;
+  max-width: 18px;
+  border-radius: 50%;
+  background: rgba(18, 39, 68, 0.92);
+  border: 1px solid rgba(194, 226, 255, 0.95);
+  box-sizing: border-box;
+  box-shadow: 0 0 8px rgba(85, 169, 255, 0.8), 0 2px 6px rgba(0, 0, 0, 0.55);
+  image-rendering: pixelated;
+  object-fit: contain;
+  transform: none;
+}
+
+.hns_entity .hns_entity_thorns_icon {
+  background: rgba(60, 34, 20, 0.94);
+  border-color: rgba(204, 151, 93, 0.95);
+  box-shadow: 0 0 8px rgba(128, 76, 36, 0.85), 0 2px 6px rgba(0, 0, 0, 0.55);
 }
 
 .hns_monster_cards {
@@ -564,6 +645,22 @@
 .hns_power_card img {
   display: block;
   width: 100%;
+}
+
+.hns_power_card_name {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 5px 6px 6px;
+  background: linear-gradient(180deg, transparent 0%, rgba(18, 13, 10, 0.82) 28%, rgba(18, 13, 10, 0.96) 100%);
+  color: #fff1d8;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.05;
+  text-align: center;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
+  pointer-events: none;
 }
 
 .hns_power_card_badges {

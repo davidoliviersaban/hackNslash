@@ -32,7 +32,8 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('"2": { "name": "Boss fight" }', $options);
         $this->assertStringContainsString('const HNS_DIFFICULTY_BOSS_FIGHT = 2;', $constants);
         $this->assertStringContainsString('const HNS_BOSS_FIGHT_HEALTH = 100;', $constants);
-        $this->assertStringContainsString("private const HNS_BOSS_FIGHT_POWER_KEYS = ['dash_3', 'vortex_2'];", $setupSource);
+        $this->assertStringContainsString('private const HNS_BOSS_FIGHT_POWER_COUNT = 2;', $setupSource);
+        $this->assertStringContainsString('shuffle($powerKeys);', $setupSource);
         $this->assertStringContainsString('$startLevel = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_LEVEL : HNS_FIRST_LEVEL;', $gameSource);
         $this->assertStringContainsString('$startingHealth = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_FIGHT_HEALTH : HNS_DEFAULT_HEALTH;', $gameSource);
     }
@@ -75,6 +76,17 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('entity_has_shield has_shield', $boardSource);
         $this->assertStringContainsString('entity_has_shield = $hasShield', $boardSource);
         $this->assertStringContainsString('entity_has_shield, entity_shield_broken', $setupSource);
+    }
+
+    public function testSpawnLabelsAreStoredOnTiles(): void
+    {
+        $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
+        $boardSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Board.php');
+        $dbmodel = self::readFile(dirname(__DIR__) . '/dbmodel.sql');
+
+        $this->assertStringContainsString('tile_spawn_label', $dbmodel);
+        $this->assertStringContainsString('spawnLabelsByCoordinate', $setupSource);
+        $this->assertStringContainsString('tile_spawn_label spawn_label', $boardSource);
     }
 
     public function testBoardMigratesExistingStudioEntityTables(): void
@@ -120,12 +132,61 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('deleteMonstersOutsideLevel($nextLevel)', $gameSource);
     }
 
-    public function testInitialSetupDoesNotRandomlyGrantMonsterEnchantments(): void
+    public function testSetupDrawsDeterministicMonsterEnchantmentsAfterFirstLevel(): void
     {
         $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
 
-        $this->assertStringContainsString('protected function drawLevelEnchantments(): array', $setupSource);
-        $this->assertStringNotContainsString("['shield', 'thorns', null]", $setupSource);
+        $this->assertStringContainsString('protected function drawLevelEnchantments(int $level): array', $setupSource);
+        $this->assertStringContainsString('$cycle = [\'shield\', \'thorns\', null];', $setupSource);
+        $this->assertStringContainsString('drawLevelEnchantments($level)', $setupSource);
+    }
+
+    public function testLevelEnchantmentCycle(): void
+    {
+        require_once dirname(__DIR__) . '/modules/material/constants.inc.php';
+        require_once dirname(__DIR__) . '/modules/HNS_Setup.php';
+
+        $setup = new class {
+            use HNS_Setup {
+                drawLevelEnchantments as public;
+            }
+        };
+
+        $this->assertSame([], $setup->drawLevelEnchantments(1));
+        $this->assertSame(['shield'], $setup->drawLevelEnchantments(2));
+        $this->assertSame(['thorns'], $setup->drawLevelEnchantments(3));
+        $this->assertSame([], $setup->drawLevelEnchantments(4));
+        $this->assertSame(['shield'], $setup->drawLevelEnchantments(5));
+        $this->assertSame(['thorns'], $setup->drawLevelEnchantments(6));
+        $this->assertSame([], $setup->drawLevelEnchantments(HNS_BOSS_LEVEL));
+    }
+
+    public function testBossFightStartingPowersDrawsTwoRankThreePowers(): void
+    {
+        require_once dirname(__DIR__) . '/modules/HNS_Setup.php';
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $setup = new class($bonus_cards) {
+            use HNS_Setup {
+                bossFightStartingPowers as public;
+            }
+
+            public array $bonus_cards;
+
+            public function __construct(array $bonusCards)
+            {
+                $this->bonus_cards = $bonusCards;
+            }
+        };
+
+        $powers = $setup->bossFightStartingPowers();
+
+        $this->assertCount(2, $powers);
+        $this->assertCount(2, array_unique($powers));
+        foreach ($powers as $powerKey) {
+            $this->assertArrayHasKey($powerKey, $bonus_cards);
+            $this->assertSame(3, (int) $bonus_cards[$powerKey]['rank']);
+        }
     }
 
     public function testSetupActivatesFirstCreatedPlayer(): void

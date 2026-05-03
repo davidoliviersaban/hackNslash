@@ -251,6 +251,21 @@ final class MonsterAiTest extends TestCase
         $this->assertSame([['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
     }
 
+    public function testWizardCannotAttackThroughObstacle(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 4, 'y' => 0, 'type' => 'floor'];
+        $state['tiles'][3]['type'] = 'pillar';
+        $state['entities'][10]['tile_id'] = 6;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20]['tile_id'] = 2;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[5]);
+
+        $this->assertSame(10, $result['state']['entities'][10]['health']);
+        $this->assertNotContains('monsterAttack', array_column($result['events'], 'type'));
+    }
+
     public function testWizardMovesOrthogonallyOneTileWhenItCannotAttack(): void
     {
         $state = $this->state;
