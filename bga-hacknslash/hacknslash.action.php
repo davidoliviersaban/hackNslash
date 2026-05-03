@@ -52,8 +52,18 @@ class action_hacknslash extends APP_GameAction
         self::setAjaxMode();
         $mode = self::getArg('mode', AT_alphanum, true);
         $slot = self::getArg('slot', AT_posint, true);
-        $powerKey = self::getArg('power_key', AT_alphanum, false, '');
+        $powerKey = isset($_REQUEST['power_key']) ? (string) $_REQUEST['power_key'] : '';
+        if (!preg_match('/\A[A-Za-z0-9_-]*\z/', $powerKey)) {
+            throw new BgaUserException(clienttranslate('Invalid power key.'));
+        }
         $this->game->actChooseReward($mode, $slot, $powerKey);
+        self::ajaxResponse();
+    }
+
+    public function actSkipReward()
+    {
+        self::setAjaxMode();
+        $this->game->actSkipReward();
         self::ajaxResponse();
     }
 

@@ -155,8 +155,27 @@ final class GameEngineTest extends TestCase
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
         $this->assertSame([
-            ['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9],
+            ['type' => 'monsterAttack', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9, 'actor_entity_ids' => [20, 21]],
         ], $result['events']);
+    }
+
+    public function testMonsterAttackEventsExposeAllActorEntityIds(): void
+    {
+        $state = [
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+            ],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 1, 'health' => 10, 'state' => 'active'],
+                20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'health' => 1, 'state' => 'active'],
+                21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'health' => 1, 'state' => 'active'],
+            ],
+        ];
+
+        $result = HNS_GameEngine::activateMonsters($state, $this->monsters);
+
+        $this->assertSame([20, 21], $result['events'][0]['actor_entity_ids']);
     }
 
     public function testStackedGoblinsMoveOnceAsAStack(): void
@@ -179,6 +198,33 @@ final class GameEngineTest extends TestCase
         $this->assertSame(2, $result['state']['entities'][20]['tile_id']);
         $this->assertSame(2, $result['state']['entities'][21]['tile_id']);
         $this->assertSame([['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2, 'moved_entity_ids' => [20, 21]]], $result['events']);
+    }
+
+    public function testActivateMonstersActivatesBosses(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+
+        $state = [
+            'bosses' => $bosses,
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+                3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'floor'],
+            ],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 3, 'health' => 10, 'state' => 'active'],
+                30 => ['id' => 30, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 1, 'monster_size' => 'boss', 'tile_id' => 1, 'health' => 8, 'state' => 'active'],
+            ],
+        ];
+
+        $result = HNS_GameEngine::activateMonsters($state, $this->monsters);
+
+        $this->assertSame(2, $result['state']['entities'][30]['tile_id']);
+        $this->assertSame(8, $result['state']['entities'][10]['health']);
+        $this->assertSame([
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 2],
+            ['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 8],
+        ], $result['events']);
     }
 
     public function testPrepareLevelRewardAddsOfferOnlyWhenCleared(): void

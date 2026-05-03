@@ -28,17 +28,44 @@ final class LevelGeneratorTest extends TestCase
         $this->assertNotSame($level['entry']['y'], $level['exit']['y']);
     }
 
+    public function testMonsterStartsNeverUseEntryOrExit(): void
+    {
+        $level = HNS_LevelGenerator::generate(5, 42);
+        $blocked = [
+            $level['entry']['x'] . ',' . $level['entry']['y'] => true,
+            $level['exit']['x'] . ',' . $level['exit']['y'] => true,
+        ];
+
+        foreach ($level['monster_starts'] as $start) {
+            $this->assertArrayNotHasKey($start['x'] . ',' . $start['y'], $blocked);
+        }
+    }
+
     public function testGeneratedLevelContainsExpectedTerrainCountsForFiveByFive(): void
     {
         $level = HNS_LevelGenerator::generate(5, 99);
         $counts = array_count_values(array_column($level['terrain'], 'terrain'));
 
-        $this->assertSame(2, $counts['wall'] - (($level['grid_size'] * 4) - 4 - 2));
-        $this->assertSame(1, $counts['pillar']);
+        $this->assertSame(0, $counts['wall'] - (($level['grid_size'] * 4) - 4 - 2));
+        $this->assertSame(3, $counts['pillar']);
         $this->assertSame(2, $counts['spikes']);
         $this->assertSame(1, $counts['hole']);
         $this->assertSame(1, $counts['entry']);
         $this->assertSame(1, $counts['exit']);
+    }
+
+    public function testWallsOnlyAppearOnOuterBorder(): void
+    {
+        $level = HNS_LevelGenerator::generate(7, 1234);
+        $max = $level['grid_size'] - 1;
+
+        foreach ($level['terrain'] as $cell) {
+            if ($cell['terrain'] !== 'wall') {
+                continue;
+            }
+
+            $this->assertTrue($cell['x'] === 0 || $cell['x'] === $max || $cell['y'] === 0 || $cell['y'] === $max);
+        }
     }
 
     public function testRejectsUnsupportedLevelSize(): void

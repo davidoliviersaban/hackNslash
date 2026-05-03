@@ -35,6 +35,8 @@ final class BoardRulesTest extends TestCase
             3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'wall'],
             4 => ['id' => 4, 'x' => 3, 'y' => 0, 'type' => 'pillar'],
             5 => ['id' => 5, 'x' => 4, 'y' => 0, 'type' => 'hole'],
+            6 => ['id' => 6, 'x' => 5, 'y' => 0, 'type' => 'entry'],
+            7 => ['id' => 7, 'x' => 6, 'y' => 0, 'type' => 'exit'],
         ];
 
         $this->assertTrue(HNS_BoardRules::isTileWalkable($tiles[1]));
@@ -42,6 +44,8 @@ final class BoardRulesTest extends TestCase
         $this->assertFalse(HNS_BoardRules::isTileWalkable($tiles[3]));
         $this->assertFalse(HNS_BoardRules::isTileWalkable($tiles[4]));
         $this->assertFalse(HNS_BoardRules::isTileWalkable($tiles[5]));
+        $this->assertFalse(HNS_BoardRules::isTileWalkable($tiles[6]));
+        $this->assertFalse(HNS_BoardRules::isTileWalkable($tiles[7]));
     }
 
     public function testOccupiedTilesCannotBeEnteredExceptByTheirCurrentOccupant(): void

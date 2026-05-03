@@ -30,13 +30,22 @@ final class HNS_BossEngine
         }
 
         $nextPhase = $phase + 1;
-        $state['entities'][$bossEntityId]['state'] = 'active';
-        $state = self::activateBossTurn($bossEntityId, $state, $bossMaterial, $events);
         $phaseMaterial = $bossMaterial[$bossKey]['phases'][$nextPhase] ?? null;
+        if ($phaseMaterial === null || !isset($phaseMaterial['health'])) {
+            throw new InvalidArgumentException("Boss $bossKey has no phase $nextPhase health.");
+        }
+
         $state['entities'][$bossEntityId]['phase'] = $nextPhase;
-        $state['entities'][$bossEntityId]['health'] = (int) ($phaseMaterial['health'] ?? 1);
+        $state['entities'][$bossEntityId]['health'] = (int) $phaseMaterial['health'];
         $state['entities'][$bossEntityId]['state'] = 'active';
-        $events[] = ['type' => 'bossPhaseStarted', 'source_entity_id' => $bossEntityId, 'boss_key' => $bossKey, 'phase' => $nextPhase];
+        $events[] = [
+            'type' => 'bossPhaseStarted',
+            'source_entity_id' => $bossEntityId,
+            'entity_id' => $bossEntityId,
+            'boss_key' => $bossKey,
+            'phase' => $nextPhase,
+            'health' => (int) $phaseMaterial['health'],
+        ];
 
         return $state;
     }
@@ -47,7 +56,7 @@ final class HNS_BossEngine
      * @param array<int, array<string, mixed>> $events
      * @return array<string, mixed>
      */
-    public static function activateBossTurn(int $bossEntityId, array $state, array $bossMaterial, array &$events): array
+    public static function activateBossTurn(int $bossEntityId, array $state, array $bossMaterial, array &$events, bool $canMove = true): array
     {
         $boss = $state['entities'][$bossEntityId];
         $bossKey = (string) ($boss['boss_key'] ?? '');
@@ -58,8 +67,12 @@ final class HNS_BossEngine
 
             return $state;
         }
+        if (!$canMove) {
+            $phaseMaterial['can_move'] = false;
+        }
 
         $state = self::resolvePreActions($bossEntityId, $state, $phaseMaterial, $events);
+        $state = self::activateSpawnedMinions($state, $events);
         $result = HNS_MonsterAi::activate($bossEntityId, $state, $phaseMaterial);
         array_push($events, ...$result['events']);
 
@@ -83,6 +96,38 @@ final class HNS_BossEngine
             if (($action['type'] ?? null) === 'spawn_minions') {
                 $state = self::spawnMinions($bossEntityId, $state, $action, $events);
             }
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function activateSpawnedMinions(array $state, array &$events): array
+    {
+        $spawnedEntityIds = $state['_boss_spawned_entity_ids'] ?? [];
+        unset($state['_boss_spawned_entity_ids']);
+        foreach ($spawnedEntityIds as $entityId) {
+            $entityId = (int) $entityId;
+            if (($state['entities'][$entityId]['state'] ?? null) !== 'active') {
+                continue;
+            }
+
+            $monsterId = (int) ($state['entities'][$entityId]['type_arg'] ?? 0);
+            $material = $state['monster_material'][$monsterId] ?? null;
+            if (!is_array($material)) {
+                continue;
+            }
+
+            // Spawned minions join the boss turn by advancing, but the boss keeps
+            // the actual attack beat for this phase.
+            $material['can_attack'] = false;
+            $result = HNS_MonsterAi::activate($entityId, $state, $material);
+            $state = $result['state'];
+            array_push($events, ...$result['events']);
         }
 
         return $state;
@@ -153,6 +198,7 @@ final class HNS_BossEngine
                 $state['entities'][$entityId]['has_shield'] = true;
                 $state['entities'][$entityId]['shield_broken'] = false;
             }
+            $state['_boss_spawned_entity_ids'][] = $entityId;
             $events[] = ['type' => 'bossSpawnMinion', 'source_entity_id' => $bossEntityId, 'summoned_entity_id' => $entityId, 'monster_id' => $monsterId, 'target_tile_id' => (int) $tile['id']];
         }
 

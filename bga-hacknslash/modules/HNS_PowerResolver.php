@@ -42,32 +42,38 @@ final class HNS_PowerResolver
     private static function resolveAttack(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
         self::assertEntityExists($state, $sourceEntityId);
-        $targetEntityId = (int) ($payload['target_entity_id'] ?? 0);
-        if ($targetEntityId === 0 && !empty($payload['target_tile_id'])) {
-            $targetEntityId = self::attackTargetEntityIdForTile((int) $payload['target_tile_id'], $state);
+        $targetEntityIds = self::attackTargetEntityIds($payload, $state, (int) ($power['targets'] ?? 1));
+        if ($targetEntityIds === []) {
+            throw new InvalidArgumentException('No attack target selected.');
         }
-        self::assertEntityExists($state, $targetEntityId);
 
-        $sourceType = (string) ($state['entities'][$sourceEntityId]['type'] ?? '');
-        $targetType = (string) ($state['entities'][$targetEntityId]['type'] ?? '');
-        if ($sourceType === 'hero' && $targetType === 'hero') {
-            throw new InvalidArgumentException("Cannot target an allied hero with $powerKey.");
+        if (count($targetEntityIds) > (int) ($power['targets'] ?? 1)) {
+            throw new InvalidArgumentException("Too many targets for $powerKey.");
         }
 
         $sourceTile = self::entityTile($state, $sourceEntityId);
-        $targetTile = self::entityTile($state, $targetEntityId);
-        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
-            ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
-            : HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['range']);
-        if (!$isInRange) {
-            throw new InvalidArgumentException("Target is out of range for $powerKey.");
-        }
+        foreach ($targetEntityIds as $targetEntityId) {
+            self::assertEntityExists($state, $targetEntityId);
+            $sourceType = (string) ($state['entities'][$sourceEntityId]['type'] ?? '');
+            $targetType = (string) ($state['entities'][$targetEntityId]['type'] ?? '');
+            if ($sourceType === 'hero' && $targetType === 'hero') {
+                throw new InvalidArgumentException("Cannot target an allied hero with $powerKey.");
+            }
 
-        $state = self::damageEntity($targetEntityId, (int) $power['damage'], $sourceEntityId, $state, $events);
+            $targetTile = self::entityTile($state, $targetEntityId);
+            $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+                ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
+                : HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['range']);
+            if (!$isInRange) {
+                throw new InvalidArgumentException("Target is out of range for $powerKey.");
+            }
 
-        if (in_array('thorns', $state['level_monster_abilities'] ?? [], true) && HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
-            $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
-            $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
+            $state = self::damageEntity($targetEntityId, (int) $power['damage'], $sourceEntityId, $state, $events);
+
+            if (in_array('thorns', $state['level_monster_abilities'] ?? [], true) && HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
+                $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
+                $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
+            }
         }
 
         return ['state' => $state, 'events' => $events];
@@ -109,6 +115,7 @@ final class HNS_PowerResolver
 
         if (HNS_BoardRules::canEnterTile($targetTileId, $state['entities'], $state['entities'][$sourceEntityId], $sourceEntityId)) {
             $state['entities'][$sourceEntityId]['tile_id'] = $targetTileId;
+            $state['entities'][$sourceEntityId]['status'] = self::removeStatusToken((string) ($state['entities'][$sourceEntityId]['status'] ?? ''), 'slimed');
             $events[] = [
                 'type' => HNS_FreeActionEngine::EVENT_AFTER_DASH,
                 'source_entity_id' => $sourceEntityId,
@@ -117,6 +124,13 @@ final class HNS_PowerResolver
         }
 
         return ['state' => $state, 'events' => $events];
+    }
+
+    private static function removeStatusToken(string $status, string $token): ?string
+    {
+        $tokens = array_values(array_filter(preg_split('/\s+/', trim($status)) ?: [], static fn (string $value): bool => $value !== '' && $value !== $token));
+
+        return $tokens === [] ? null : implode(' ', $tokens);
     }
 
     /**
@@ -135,6 +149,10 @@ final class HNS_PowerResolver
 
         if (count($targetEntityIds) > (int) $power['targets']) {
             throw new InvalidArgumentException('Too many targets for pull power.');
+        }
+
+        if (count($targetEntityIds) !== count(array_unique($targetEntityIds))) {
+            throw new InvalidArgumentException('Pull power cannot target the same entity more than once.');
         }
 
         $sourceTile = self::entityTile($state, $sourceEntityId);
@@ -312,7 +330,7 @@ final class HNS_PowerResolver
                 continue;
             }
 
-            if (($entity['type'] ?? null) === 'monster' && (int) ($entity['tile_id'] ?? 0) === $tileId) {
+            if (in_array($entity['type'] ?? null, ['monster', 'boss'], true) && (int) ($entity['tile_id'] ?? 0) === $tileId) {
                 $monsterIds[] = (int) $entityId;
             }
         }
@@ -372,17 +390,31 @@ final class HNS_PowerResolver
         $newHealth = max(0, (int) $state['entities'][$targetEntityId]['health'] - $damage);
         $state['entities'][$targetEntityId]['health'] = $newHealth;
 
+        if ($damage > 0 && $newHealth > 0) {
+            $events[] = [
+                'type' => 'entityDamaged',
+                'source_entity_id' => $sourceEntityId,
+                'target_entity_id' => $targetEntityId,
+                'damage' => $damage,
+                'target_health' => $newHealth,
+            ];
+        }
+
         if ($newHealth === 0 && ($state['entities'][$targetEntityId]['state'] ?? 'active') !== 'dead') {
             $state['entities'][$targetEntityId]['state'] = 'dead';
             if (($state['entities'][$targetEntityId]['type'] ?? null) === 'monster') {
-                $events[] = [
+                $killEvent = [
                     'type' => HNS_FreeActionEngine::EVENT_AFTER_KILL,
                     'source_entity_id' => $sourceEntityId,
                     'target_entity_id' => $targetEntityId,
                 ];
+                if (($state['entities'][$targetEntityId]['on_death'] ?? null) !== null) {
+                    $killEvent['death_effect'] = $state['entities'][$targetEntityId]['on_death'];
+                }
+                $events[] = $killEvent;
 
                 if (($state['entities'][$targetEntityId]['on_death'] ?? null) === 'explode') {
-                    $state = HNS_MonsterAi::explode($targetEntityId, $state, $state['entities'][$targetEntityId], $events);
+                    $state = HNS_MonsterAi::explode($targetEntityId, $state, self::monsterMaterialForEntity($state['entities'][$targetEntityId]), $events);
                 }
             }
 
@@ -392,6 +424,16 @@ final class HNS_PowerResolver
         }
 
         return $state;
+    }
+
+    /** @param array<string, mixed> $entity */
+    private static function monsterMaterialForEntity(array $entity): array
+    {
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $monsterId = (int) ($entity['type_arg'] ?? 0);
+
+        return array_merge($monsters[$monsterId] ?? [], $entity);
     }
 
     /**
@@ -413,6 +455,20 @@ final class HNS_PowerResolver
         if (!isset($state['entities'][$entityId])) {
             throw new InvalidArgumentException("Unknown entity $entityId.");
         }
+    }
+
+    /** @param array<string, mixed> $state */
+    private static function attackTargetEntityIds(array $payload, array $state, int $maxTargets): array
+    {
+        $targetEntityIds = array_map('intval', $payload['target_entity_ids'] ?? []);
+        if ($targetEntityIds === [] && !empty($payload['target_entity_id'])) {
+            $targetEntityIds[] = (int) $payload['target_entity_id'];
+        }
+        if ($targetEntityIds === [] && !empty($payload['target_tile_id'])) {
+            $targetEntityIds[] = self::attackTargetEntityIdForTile((int) $payload['target_tile_id'], $state);
+        }
+
+        return array_values(array_slice($targetEntityIds, 0, $maxTargets + 1));
     }
 
     /** @param array<string, mixed> $state */

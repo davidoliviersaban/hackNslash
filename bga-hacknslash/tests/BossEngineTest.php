@@ -21,10 +21,11 @@ final class BossEngineTest extends TestCase
         $this->assertSame(8, $entity['health']);
     }
 
-    public function testSlasherPhaseTwoSpawnsTwoMinionsBeforeAction(): void
+    public function testSlasherPhaseTwoSpawnsTwoMinionsMovesThemThenActs(): void
     {
         include dirname(__DIR__) . '/modules/material/bosses.inc.php';
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+        $bosses['slasher']['phases'][2]['range'] = 2;
 
         $events = [];
         $state = $this->bossState(2, $monsters);
@@ -35,7 +36,18 @@ final class BossEngineTest extends TestCase
         $this->assertArrayHasKey(32, $state['entities']);
         $this->assertSame('bossSpawnMinion', $events[0]['type']);
         $this->assertSame('bossSpawnMinion', $events[1]['type']);
-        $this->assertSame('monsterMove', $events[2]['type']);
+        $bossActionIndex = null;
+        foreach ($events as $index => $event) {
+            if (($event['source_entity_id'] ?? null) === 30 && in_array($event['type'] ?? null, ['monsterMove', 'monsterAttack'], true)) {
+                $bossActionIndex = $index;
+                break;
+            }
+        }
+
+        $this->assertNotNull($bossActionIndex);
+        $this->assertContains(['type' => 'monsterMove', 'source_entity_id' => 31, 'target_tile_id' => $state['entities'][31]['tile_id']], array_slice($events, 2, $bossActionIndex - 2));
+        $this->assertContains(['type' => 'monsterMove', 'source_entity_id' => 32, 'target_tile_id' => $state['entities'][32]['tile_id']], array_slice($events, 2, $bossActionIndex - 2));
+        $this->assertContains('monsterAttack', array_column(array_slice($events, $bossActionIndex), 'type'));
     }
 
     public function testSlasherPhaseThreeGrantsShieldThenSpawnsThenActs(): void

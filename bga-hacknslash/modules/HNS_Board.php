@@ -79,9 +79,10 @@ trait HNS_Board
             $status = $this->hns_sql_nullable_string($entity['status'] ?? null);
             $hasShield = !empty($entity['has_shield']) ? 1 : 0;
             $shieldBroken = !empty($entity['shield_broken']) ? 1 : 0;
+            $phase = (int) ($entity['phase'] ?? 0);
 
             if (isset($existingIds[$id])) {
-                $this->DbQuery("UPDATE entity SET entity_tile_id = $tileId, entity_health = $health, entity_state = '$entityState', entity_status = $status, entity_has_shield = $hasShield, entity_shield_broken = $shieldBroken WHERE entity_id = $id");
+                $this->DbQuery("UPDATE entity SET entity_tile_id = $tileId, entity_health = $health, entity_state = '$entityState', entity_phase = $phase, entity_status = $status, entity_has_shield = $hasShield, entity_shield_broken = $shieldBroken WHERE entity_id = $id");
                 $this->syncHeroPlayerHealth($entity, $health);
                 continue;
             }
@@ -93,7 +94,6 @@ trait HNS_Board
             $onDeath = $this->hns_sql_nullable_string($entity['on_death'] ?? null);
             $slot = isset($entity['slot']) ? (int) $entity['slot'] : 'NULL';
             $bossKey = $this->hns_sql_nullable_string($entity['boss_key'] ?? null);
-            $phase = (int) ($entity['phase'] ?? 0);
             $this->DbQuery("INSERT INTO entity (entity_id, entity_type, entity_type_arg, entity_owner, entity_tile_id, entity_health, entity_state, entity_monster_size, entity_boss_key, entity_phase, entity_status, entity_on_death, entity_has_shield, entity_shield_broken, entity_slot) VALUES ($id, '$type', $typeArg, $owner, $tileId, $health, '$entityState', $size, $bossKey, $phase, $status, $onDeath, $hasShield, $shieldBroken, $slot)");
             $this->syncHeroPlayerHealth($entity, $health);
         }
@@ -162,5 +162,11 @@ trait HNS_Board
     protected function deleteMonstersOutsideLevel(int $level): void
     {
         $this->DbQuery("DELETE e FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_type IN ('monster', 'boss') AND t.tile_level <> $level");
+    }
+
+    protected function deleteDeadEnemiesForCurrentLevel(): void
+    {
+        $level = (int) $this->getGameStateValue('current_level');
+        $this->DbQuery("DELETE e FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_type IN ('monster', 'boss') AND t.tile_level = $level AND (e.entity_state = 'dead' OR e.entity_health <= 0)");
     }
 }

@@ -82,4 +82,43 @@ final class FreeActionEngineTest extends TestCase
             0
         ));
     }
+
+    public function testFreeActionCanChainFromEventsProducedByAFreeAction(): void
+    {
+        $engine = new HNS_FreeActionEngine([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_player_id' => 1],
+        ]);
+
+        $result = $engine->useFreeAction(
+            'dash_1',
+            [HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED],
+            0,
+            2,
+            [
+                ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_player_id' => 1],
+                ['type' => HNS_FreeActionEngine::EVENT_ENTITY_DAMAGED, 'source_player_id' => 1],
+            ]
+        );
+
+        $nextEngine = new HNS_FreeActionEngine($result['active_event_chain'], $result['used_action_keys']);
+
+        $this->assertTrue($nextEngine->canUseFreeAction(
+            'dash_2',
+            [HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED],
+            0
+        ));
+    }
+
+    public function testDashFreeTriggerDoesNotMatchDamageOnlyEvents(): void
+    {
+        $engine = new HNS_FreeActionEngine([
+            ['type' => HNS_FreeActionEngine::EVENT_ENTITY_DAMAGED, 'source_player_id' => 1],
+        ]);
+
+        $this->assertFalse($engine->canUseFreeAction(
+            'dash_1',
+            [HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED],
+            0
+        ));
+    }
 }

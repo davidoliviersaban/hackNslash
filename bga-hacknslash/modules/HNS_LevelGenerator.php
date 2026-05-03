@@ -11,8 +11,8 @@ final class HNS_LevelGenerator
     private const TERRAIN_EXIT = 'exit';
 
     private const COUNTS_BY_SIZE = [
-        5 => ['walls' => 2, 'pillars' => 1, 'spikes' => 2, 'holes' => 1, 'monsters' => 7],
-        7 => ['walls' => 6, 'pillars' => 4, 'spikes' => 4, 'holes' => 3, 'monsters' => 7],
+        5 => ['walls' => 0, 'pillars' => 3, 'spikes' => 2, 'holes' => 1, 'monsters' => 7],
+        7 => ['walls' => 0, 'pillars' => 10, 'spikes' => 4, 'holes' => 3, 'monsters' => 7],
     ];
 
     /** @return array<string, mixed> */
@@ -65,8 +65,8 @@ final class HNS_LevelGenerator
             return null;
         }
 
-        $reachable = array_values(array_filter(self::reachableCells($grid, $entry), static function (array $cell) use ($grid): bool {
-            return in_array($grid[$cell['y']][$cell['x']], [self::TERRAIN_FLOOR, self::TERRAIN_ENTRY, self::TERRAIN_EXIT], true);
+        $reachable = array_values(array_filter(self::reachableCells($grid, $anchor), static function (array $cell) use ($grid): bool {
+            return in_array($grid[$cell['y']][$cell['x']], [self::TERRAIN_FLOOR, self::TERRAIN_SPIKES], true);
         }));
         $monsterCandidates = array_values(array_filter($reachable, static fn (array $cell): bool => !self::containsCell($reserved, $cell)));
         if (count($monsterCandidates) < $counts['monsters']) {
@@ -138,9 +138,9 @@ final class HNS_LevelGenerator
     /** @param array<int, array<int, string>> $grid */
     private static function validLayout(array $grid, array $reserved): bool
     {
-        $reachable = self::reachableCells($grid, $reserved[0]);
+        $reachable = self::reachableCells($grid, $reserved[2] ?? $reserved[0]);
 
-        foreach ($reserved as $cell) {
+        foreach (array_slice($reserved, 2) as $cell) {
             if (!self::containsCell($reachable, $cell)) {
                 return false;
             }
@@ -174,7 +174,7 @@ final class HNS_LevelGenerator
     /** @param array<int, array<int, string>> $grid */
     private static function walkable(array $grid, array $cell): bool
     {
-        return in_array($grid[$cell['y']][$cell['x']], [self::TERRAIN_FLOOR, self::TERRAIN_SPIKES, self::TERRAIN_ENTRY, self::TERRAIN_EXIT], true);
+        return in_array($grid[$cell['y']][$cell['x']], [self::TERRAIN_FLOOR, self::TERRAIN_SPIKES], true);
     }
 
     /** @param array<int, array<int, string>> $grid */

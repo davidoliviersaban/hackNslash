@@ -47,6 +47,10 @@ final class HNS_MonsterAi
             $state = self::moveToAttackRange($monsterEntityId, $targetHeroId, $state, $monsterMaterial, $events);
         }
 
+        if (($monsterMaterial['effect'] ?? null) === 'stick' && self::canAttack($monsterEntityId, $targetHeroId, $state, $monsterMaterial)) {
+            $state = self::attack($monsterEntityId, $targetHeroId, $state, $monsterMaterial, $events);
+        }
+
         return ['state' => $state, 'events' => $events];
     }
 
@@ -104,7 +108,7 @@ final class HNS_MonsterAi
     {
         $damage = (int) ($monsterMaterial['damage'] ?? 0);
         if (($monsterMaterial['effect'] ?? 'damage') === 'stick') {
-            $state['entities'][$heroEntityId]['status'] = 'stuck';
+            $state['entities'][$heroEntityId]['status'] = 'slimed';
             $events[] = ['type' => 'monsterStick', 'source_entity_id' => $monsterEntityId, 'target_entity_id' => $heroEntityId];
 
             return $state;
@@ -336,6 +340,7 @@ final class HNS_MonsterAi
         $monsterTile = self::entityTile($monsterEntityId, $state);
         $damage = (int) ($monsterMaterial['damage'] ?? 0);
         $targetHeroIds = [];
+        $targetHealthByEntityId = [];
 
         foreach ($state['entities'] as $entityId => $entity) {
             if (($entity['type'] ?? null) !== 'hero' || ($entity['state'] ?? 'active') !== 'active') {
@@ -351,11 +356,12 @@ final class HNS_MonsterAi
                 $state['entities'][$entityId]['state'] = 'dead';
             }
             $targetHeroIds[] = (int) $entityId;
+            $targetHealthByEntityId[(int) $entityId] = (int) $state['entities'][$entityId]['health'];
         }
 
         $state['entities'][$monsterEntityId]['health'] = 0;
         $state['entities'][$monsterEntityId]['state'] = 'dead';
-        $events[] = ['type' => 'monsterExplode', 'source_entity_id' => $monsterEntityId, 'target_entity_ids' => $targetHeroIds, 'damage' => $damage];
+        $events[] = ['type' => 'monsterExplode', 'source_entity_id' => $monsterEntityId, 'target_entity_ids' => $targetHeroIds, 'target_health_by_entity_id' => $targetHealthByEntityId, 'damage' => $damage];
 
         return $state;
     }

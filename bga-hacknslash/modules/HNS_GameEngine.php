@@ -128,6 +128,14 @@ final class HNS_GameEngine
                 continue;
             }
 
+            if (($state['entities'][$entityId]['type'] ?? null) === 'boss') {
+                $bossEvents = [];
+                $state = HNS_BossEngine::activateBossTurn($entityId, $state, $state['bosses'] ?? [], $bossEvents);
+                array_push($events, ...$bossEvents);
+                $activatedEntities[$entityId] = true;
+                continue;
+            }
+
             $monsterId = (int) ($state['entities'][$entityId]['type_arg'] ?? 0);
             if (!isset($monsterMaterial[$monsterId])) {
                 continue;
@@ -139,7 +147,7 @@ final class HNS_GameEngine
             $state = $result['state'];
             $resultEvents = self::applyStackMovement($entityId, $beforeTileId, $stackEntityIds, $state, $result['events']);
             $state = $resultEvents['state'];
-            array_push($events, ...$resultEvents['events']);
+            array_push($events, ...self::addActorEntityIds($resultEvents['events'], $stackEntityIds));
             foreach ($stackEntityIds as $stackEntityId) {
                 $activatedEntities[$stackEntityId] = true;
             }
@@ -169,6 +177,26 @@ final class HNS_GameEngine
         }
         sort($ids);
         return $ids;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $events
+     * @param array<int, int> $stackEntityIds
+     * @return array<int, array<string, mixed>>
+     */
+    private static function addActorEntityIds(array $events, array $stackEntityIds): array
+    {
+        foreach ($events as &$event) {
+            if (!in_array($event['type'] ?? null, ['monsterAttack', 'monsterStick', 'monsterCharge', 'monsterFrontArcAttack', 'monsterSummon', 'monsterExplode'], true)) {
+                continue;
+            }
+
+            if (!isset($event['actor_entity_ids'])) {
+                $event['actor_entity_ids'] = $stackEntityIds;
+            }
+        }
+
+        return $events;
     }
 
     /**
@@ -204,6 +232,10 @@ final class HNS_GameEngine
     /** @param array<string, mixed> $state */
     public static function isLevelCleared(array $state): bool
     {
+        if (!empty($state['game_won'])) {
+            return true;
+        }
+
         foreach ($state['entities'] as $entity) {
             if (in_array($entity['type'] ?? null, ['monster', 'boss'], true) && ($entity['state'] ?? 'active') === 'active') {
                 return false;

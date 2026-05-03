@@ -102,14 +102,14 @@ final class MonsterAiTest extends TestCase
         ], $result['events']);
     }
 
-    public function testSlimeSticksOrthogonallyAdjacentHero(): void
+    public function testSlimeSlimesOrthogonallyAdjacentHeroWithoutDamage(): void
     {
         $state = $this->state;
         $state['entities'][20]['tile_id'] = 2;
 
         $result = HNS_MonsterAi::activate(20, $state, $this->monsters[2]);
 
-        $this->assertSame('stuck', $result['state']['entities'][10]['status']);
+        $this->assertSame('slimed', $result['state']['entities'][10]['status']);
         $this->assertSame(10, $result['state']['entities'][10]['health']);
         $this->assertSame([['type' => 'monsterStick', 'source_entity_id' => 20, 'target_entity_id' => 10]], $result['events']);
     }
@@ -130,6 +130,24 @@ final class MonsterAiTest extends TestCase
         $this->assertSame([
             ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 6],
             ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 7],
+        ], $result['events']);
+    }
+
+    public function testSlimeSticksAfterMovingOrthogonallyAdjacentToHero(): void
+    {
+        $state = $this->state;
+        $state['tiles'][6] = ['id' => 6, 'x' => 3, 'y' => 1, 'type' => 'floor'];
+        $state['entities'][10]['tile_id'] = 4;
+        $state['entities'][11]['state'] = 'dead';
+        $state['entities'][20]['tile_id'] = 1;
+
+        $result = HNS_MonsterAi::activate(20, $state, $this->monsters[2]);
+
+        $this->assertSame('slimed', $result['state']['entities'][10]['status']);
+        $this->assertSame([
+            ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 2],
+            ['type' => 'monsterMove', 'source_entity_id' => 20, 'target_tile_id' => 3],
+            ['type' => 'monsterStick', 'source_entity_id' => 20, 'target_entity_id' => 10],
         ], $result['events']);
     }
 
@@ -159,7 +177,7 @@ final class MonsterAiTest extends TestCase
         $this->assertSame(8, $result['state']['entities'][10]['health']);
         $this->assertSame(0, $result['state']['entities'][20]['health']);
         $this->assertSame('dead', $result['state']['entities'][20]['state']);
-        $this->assertSame([['type' => 'monsterExplode', 'source_entity_id' => 20, 'target_entity_ids' => [10], 'damage' => 2]], $result['events']);
+        $this->assertSame([['type' => 'monsterExplode', 'source_entity_id' => 20, 'target_entity_ids' => [10], 'target_health_by_entity_id' => [10 => 8], 'damage' => 2]], $result['events']);
     }
 
     public function testKamikazeMovesDiagonallyOneTileWhenNotOrthogonalToHero(): void

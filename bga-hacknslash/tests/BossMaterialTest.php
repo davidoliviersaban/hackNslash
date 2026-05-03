@@ -24,7 +24,7 @@ final class BossMaterialTest extends TestCase
 
         $phase = $bosses['slasher']['phases'][2];
 
-        $this->assertSame(9, $phase['health']);
+        $this->assertSame(8, $phase['health']);
         $this->assertSame(['type' => 'spawn_minions', 'count' => 2, 'monster_ids' => [1, 2]], $phase['pre_actions'][0]);
     }
 
@@ -34,7 +34,7 @@ final class BossMaterialTest extends TestCase
 
         $phase = $bosses['slasher']['phases'][3];
 
-        $this->assertSame(10, $phase['health']);
+        $this->assertSame(8, $phase['health']);
         $this->assertSame(['type' => 'grant_shield'], $phase['pre_actions'][0]);
         $this->assertSame(['type' => 'spawn_minions', 'count' => 2, 'monster_ids' => [1, 2]], $phase['pre_actions'][1]);
     }

@@ -123,10 +123,23 @@ class Hacknslash extends \Bga\GameFramework\Table
     public function argPlayerTurn(): array
     {
         return [
+            'name' => clienttranslate('must choose an action'),
             'action_points' => $this->getActivePlayerActionPoints(),
             'selected_tile' => (int) $this->getGameStateValue('selected_tile'),
             'free_move_available' => $this->isActivePlayerFreeMoveAvailable(),
             'main_action_available' => $this->isActivePlayerMainActionAvailable(),
+            'free_action_available' => $this->isActivePlayerFreeActionAvailable() ? 1 : 0,
+            'free_action_events' => $this->getFreeActionEventTypes(),
+        ];
+    }
+
+    public function argUpgradeReward(): array
+    {
+        return [
+            'name' => clienttranslate('upgrade your character and pick a card'),
+            'reward_pending' => $this->isRewardPending() ? 1 : 0,
+            'reward_offer' => $this->getCurrentRewardOffer(),
+            'reward_upgrades' => $this->getCurrentRewardUpgrades(),
         ];
     }
 
@@ -160,6 +173,11 @@ class Hacknslash extends \Bga\GameFramework\Table
         $result = HNS_RoundEngine::activateTraps($state);
         $this->persistEngineState($result['state']);
         $this->notifyEngineEvents($result['events'] ?? []);
+        if (!empty($result['state']['game_won'])) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
         if (HNS_RoundEngine::isGameLost($result['state'])) {
             $this->gamestate->nextState('gameEnd');
             return;
@@ -206,21 +224,7 @@ class Hacknslash extends \Bga\GameFramework\Table
             return;
         }
 
-        $this->setGameStateValue('current_level', $level + 1);
-        $this->setupInitialBoard($level + 1);
-        $this->moveHeroesToLevelStarts($level + 1);
-        $this->deleteMonstersOutsideLevel($level + 1);
-        $this->resetRoundFlags();
-        $this->notifyEngineEvents([[
-            'type' => 'levelStarted',
-            'level' => $level + 1,
-            'is_boss_level' => ($level + 1) >= HNS_BOSS_LEVEL,
-            'tiles' => $this->getTilesForLevel($level + 1),
-            'entities' => $this->getEntities(),
-            'players' => $this->getPlayersWithState(),
-            'level_monster_abilities' => $this->getLevelMonsterAbilities(),
-        ]]);
-        $this->gamestate->nextState('nextLevel');
+        $this->gamestate->nextState('upgradeReward');
     }
 
     public function stNextPlayer(): void
@@ -247,13 +251,18 @@ class Hacknslash extends \Bga\GameFramework\Table
         $tileId = (int) $tile_id;
         $entityId = $this->getHeroEntityIdForPlayer($playerId);
         $this->assertFreeMoveTarget($entityId, $tileId);
-        $this->moveHeroToTile($playerId, $tileId);
         try {
             $state = HNS_RoundEngine::consumeMove($this->loadEngineState(), $playerId);
         } catch (InvalidArgumentException $e) {
             throw new BgaUserException(clienttranslate($e->getMessage()));
         }
+        if (isset($state['entities'][$entityId])) {
+            $state['entities'][$entityId]['tile_id'] = $tileId;
+        }
         $this->persistPlayerActionFlags($state['players'][$playerId]);
+        $this->persistEngineState($state);
+        $this->syncPlayerPositionFromTile($playerId, $tileId);
+        $this->startFreeActionChain([['type' => HNS_FreeActionEngine::EVENT_AFTER_MOVE, 'source_entity_id' => $entityId, 'target_tile_id' => $tileId]]);
 
         $this->notifyAllPlayers('heroMoved', clienttranslate('${player_name} moves'), [
             'entity_id' => $entityId,
@@ -263,9 +272,11 @@ class Hacknslash extends \Bga\GameFramework\Table
             'action_points' => (int) $state['players'][$playerId]['action_points'],
             'free_move_available' => !empty($state['players'][$playerId]['free_move_available']) ? 1 : 0,
             'main_action_available' => !empty($state['players'][$playerId]['main_action_available']) ? 1 : 0,
+            'free_action_available' => $this->isPlayerFreeActionAvailable($playerId) ? 1 : 0,
+            'free_action_events' => $this->getFreeActionEventTypes(),
         ]);
 
-        if ($this->isActivePlayerTurnSpent()) {
+        if ($this->shouldEndActivePlayerTurn($playerId)) {
             $this->gamestate->nextState('endTurn');
             return;
         }
@@ -309,12 +320,24 @@ class Hacknslash extends \Bga\GameFramework\Table
             $this->consumeActivePlayerMainActionPoint($playerId);
             $this->startFreeActionChain($events);
         }
-        $heroPhaseEnding = $this->isHeroPhaseEndingAfterActiveTurn($playerId);
-        if (!$heroPhaseEnding) {
+        $shouldEndTurn = $this->shouldEndActivePlayerTurn($playerId);
+        $bossPhaseStarted = $this->hasBossPhaseStarted($events);
+        $gameWon = $this->hasGameWon($events);
+        if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon) {
             $this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey);
         }
 
-        if ($this->isActivePlayerTurnSpent()) {
+        if ($gameWon) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        if ($bossPhaseStarted) {
+            $this->gamestate->nextState('roundEnd');
+            return;
+        }
+
+        if ($shouldEndTurn) {
             $this->gamestate->nextState('endTurn');
             return;
         }
@@ -334,11 +357,24 @@ class Hacknslash extends \Bga\GameFramework\Table
         $playerId = (int) $this->getActivePlayerId();
         $this->consumeActivePlayerMainActionPoint($playerId);
         $this->startFreeActionChain($events);
-        if (!$this->isHeroPhaseEndingAfterActiveTurn($playerId)) {
+        $shouldEndTurn = $this->shouldEndActivePlayerTurn($playerId);
+        $bossPhaseStarted = $this->hasBossPhaseStarted($events);
+        $gameWon = $this->hasGameWon($events);
+        if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon) {
             $this->notifyPlayerActionState($playerId, 0, 0);
         }
 
-        if ($this->isActivePlayerTurnSpent()) {
+        if ($gameWon) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        if ($bossPhaseStarted) {
+            $this->gamestate->nextState('roundEnd');
+            return;
+        }
+
+        if ($shouldEndTurn) {
             $this->gamestate->nextState('endTurn');
             return;
         }
@@ -416,6 +452,53 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->DbQuery('DELETE FROM free_chain');
     }
 
+    private function shouldEndActivePlayerTurn(int $playerId): bool
+    {
+        return $this->isActivePlayerTurnSpent() && !$this->isPlayerFreeActionAvailable($playerId);
+    }
+
+    private function isActivePlayerFreeActionAvailable(): bool
+    {
+        return $this->isPlayerFreeActionAvailable((int) $this->getActivePlayerId());
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function hasBossPhaseStarted(array $events): bool
+    {
+        foreach ($events as $event) {
+            if (($event['type'] ?? null) === 'bossPhaseStarted') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function hasGameWon(array $events): bool
+    {
+        foreach ($events as $event) {
+            if (($event['type'] ?? null) === 'gameWon') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function isPlayerFreeActionAvailable(int $playerId): bool
+    {
+        $powers = $this->getCollectionFromDb("SELECT power_key, power_cooldown cooldown FROM player_power WHERE player_id = $playerId");
+        foreach ($powers as $power) {
+            $powerKey = (string) ($power['power_key'] ?? '');
+            if ($powerKey !== '' && isset($this->bonus_cards[$powerKey]) && $this->isFreePowerAvailable($powerKey, (int) ($power['cooldown'] ?? 0), $playerId)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     /** @return list<string> */
     private function getFreeActionEventTypes(): array
     {
@@ -437,6 +520,7 @@ class Hacknslash extends \Bga\GameFramework\Table
             'action_points' => (int) ($player['action_points'] ?? 0),
             'free_move_available' => (int) ($player['free_move_available'] ?? 0),
             'main_action_available' => (int) ($player['main_action_available'] ?? 0),
+            'free_action_available' => $this->isPlayerFreeActionAvailable($playerId) ? 1 : 0,
             'player_power_id' => $powerId,
             'power_key' => $powerKey,
             'power_cooldown' => $cooldown,
@@ -551,6 +635,15 @@ class Hacknslash extends \Bga\GameFramework\Table
             'slot' => $slot,
             'power_key' => $chosenPowerKey,
         ]);
+        $this->startNextLevelAfterReward();
+    }
+
+    public function actSkipReward(): void
+    {
+        $this->checkAction('actSkipReward');
+        $this->saveCurrentRewardOffer([]);
+        $this->saveCurrentRewardUpgrades([]);
+        $this->startNextLevelAfterReward();
     }
 
     public function actSkipFreeMove(): void
@@ -558,6 +651,9 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->checkAction('actSkipFreeMove');
         $playerId = (int) $this->getActivePlayerId();
         $this->DbQuery("UPDATE player SET player_free_move_available = 0 WHERE player_id = $playerId");
+        if ($this->isActivePlayerTurnSpent()) {
+            $this->clearFreeActionChain();
+        }
         $this->nextStateAfterOptionalActionSkip();
     }
 
@@ -579,6 +675,32 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->gamestate->nextState('continueTurn');
     }
 
+    private function startNextLevelAfterReward(): void
+    {
+        $level = (int) $this->getGameStateValue('current_level');
+        if ($level >= HNS_BOSS_LEVEL) {
+            $this->gamestate->nextState('gameEnd');
+            return;
+        }
+
+        $nextLevel = $level + 1;
+        $this->setGameStateValue('current_level', $nextLevel);
+        $this->setupInitialBoard($nextLevel);
+        $this->moveHeroesToLevelStarts($nextLevel);
+        $this->deleteMonstersOutsideLevel($nextLevel);
+        $this->resetRoundFlags();
+        $this->notifyEngineEvents([[
+            'type' => 'levelStarted',
+            'level' => $nextLevel,
+            'is_boss_level' => $nextLevel >= HNS_BOSS_LEVEL,
+            'tiles' => $this->getTilesForLevel($nextLevel),
+            'entities' => $this->getEntities(),
+            'players' => $this->getPlayersWithState(),
+            'level_monster_abilities' => $this->getLevelMonsterAbilities(),
+        ]]);
+        $this->gamestate->nextState('nextLevel');
+    }
+
     private function getHeroEntityIdForPlayer(int $playerId): int
     {
         return (int) $this->getUniqueValueFromDB("SELECT entity_id FROM entity WHERE entity_type = 'hero' AND entity_owner = $playerId ORDER BY entity_id LIMIT 1");
@@ -587,10 +709,13 @@ class Hacknslash extends \Bga\GameFramework\Table
     private function assertFreeMoveTarget(int $entityId, int $tileId): void
     {
         $from = $this->getObjectFromDB("SELECT t.tile_x x, t.tile_y y FROM entity e JOIN tile t ON t.tile_id = e.entity_tile_id WHERE e.entity_id = $entityId LIMIT 1");
-        $to = $this->getObjectFromDB("SELECT tile_x x, tile_y y FROM tile WHERE tile_id = $tileId LIMIT 1");
+        $to = $this->getObjectFromDB("SELECT tile_x x, tile_y y, tile_type type FROM tile WHERE tile_id = $tileId LIMIT 1");
 
         if (!$from || !$to || !HNS_BoardRules::isExactStep($from, $to, 1)) {
             throw new BgaUserException(clienttranslate('Free move is limited to one orthogonal step.'));
+        }
+        if (!HNS_BoardRules::isTileWalkable($to)) {
+            throw new BgaUserException(clienttranslate('Move target is not available.'));
         }
     }
 
@@ -633,6 +758,11 @@ class Hacknslash extends \Bga\GameFramework\Table
 
         $upgrades = json_decode($json, true);
         return is_array($upgrades) ? array_values(array_filter($upgrades, static fn ($upgrade): bool => is_array($upgrade))) : [];
+    }
+
+    private function isRewardPending(): bool
+    {
+        return $this->getCurrentRewardOffer() !== [] || $this->getCurrentRewardUpgrades() !== [];
     }
 
     /** @param list<array{slot:int, from:string, to:string}> $upgrades */

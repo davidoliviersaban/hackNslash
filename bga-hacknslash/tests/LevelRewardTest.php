@@ -72,7 +72,7 @@ final class LevelRewardTest extends TestCase
         $this->assertSame(['vortex'], $offer);
     }
 
-    public function testLevelRewardUpgradeOfferSkipsRankMaxAndOwnedTargets(): void
+    public function testLevelRewardUpgradeOfferSkipsRankMaxAndOffersVortexRankThree(): void
     {
         $playerPowers = [
             ['slot' => 1, 'power_key' => 'dash_2'],
@@ -82,7 +82,9 @@ final class LevelRewardTest extends TestCase
 
         $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, $playerPowers);
 
-        $this->assertSame([], $upgrades);
+        $this->assertSame([
+            ['slot' => 3, 'from' => 'vortex_2', 'to' => 'vortex_3'],
+        ], $upgrades);
     }
 
     public function testLevelRewardUpgradeOfferIsSeparateFromRankOneOffer(): void

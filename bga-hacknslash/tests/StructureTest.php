@@ -68,6 +68,9 @@ final class StructureTest extends TestCase
 
         $this->assertStringContainsString('assertFreeMoveTarget', $game);
         $this->assertStringContainsString('HNS_BoardRules::isExactStep', $game);
+        $this->assertStringContainsString('HNS_BoardRules::isTileWalkable($to)', $game);
+        $this->assertStringContainsString('Move target is not available.', $game);
+        $this->assertStringContainsString('this.isWalkableTile(tile) && !this.isTileOccupied(tile.id)', self::readFile(dirname(__DIR__) . '/hacknslash.js'));
         $this->assertStringContainsString('Free move is limited to one orthogonal step.', $game);
     }
 
@@ -93,6 +96,17 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString("'activateMonsters' => 50", $states);
     }
 
+    public function testGameWonActionGoesDirectlyToGameEndBeforeTrapPhase(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+
+        $this->assertStringContainsString('hasGameWon', $game);
+        $this->assertStringContainsString('$gameWon = $this->hasGameWon($events);', $game);
+        $this->assertStringContainsString('if ($gameWon) {', $game);
+        $this->assertStringContainsString("\$this->gamestate->nextState('gameEnd');", $game);
+        $this->assertStringContainsString('!$gameWon', $game);
+    }
+
     public function testZombieTurnConsumesSkippedPlayerActionsBeforeAdvancing(): void
     {
         $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
@@ -109,6 +123,29 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('FROM player_power WHERE player_power_id = $powerId AND player_id = $playerId', $game);
         $this->assertStringContainsString('args.card_id = power.id;', $js);
         $this->assertStringContainsString('playSelectedPower', $js);
+        $this->assertStringContainsString("'quick-shot_1': 'cards/powers/quick-shot-1.webp'", $js);
+        $this->assertStringContainsString("'quick-strike_1': 'cards/powers/quick-strike-1.png'", $js);
+        $this->assertStringContainsString("'quick-strike_3': 'cards/powers/quick-strike-3.webp'", $js);
+    }
+
+    public function testHeroCardsRenderInRightSidebarBelowActiveHero(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
+
+        $sidebarPosition = strpos($js, '<aside id="hns_side"');
+        $activeHeroPosition = strpos($js, 'id="hns_status"');
+        $handPosition = strpos($js, 'id="hns_hand"');
+        $partnerPosition = strpos($js, 'id="hns_partner_status"');
+
+        $this->assertNotFalse($sidebarPosition);
+        $this->assertNotFalse($activeHeroPosition);
+        $this->assertNotFalse($handPosition);
+        $this->assertNotFalse($partnerPosition);
+        $this->assertGreaterThan($sidebarPosition, $handPosition);
+        $this->assertGreaterThan($activeHeroPosition, $handPosition);
+        $this->assertGreaterThan($handPosition, $partnerPosition);
+        $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(96px, 1fr));', $css);
     }
 
     public function testClientMovesEntitiesFromEngineMoveEvents(): void
@@ -133,7 +170,9 @@ final class StructureTest extends TestCase
 
         $this->assertStringContainsString('moveEventEntities', $js);
         $this->assertStringContainsString('event.moved_entity_ids && event.moved_entity_ids.length', $js);
-        $this->assertStringContainsString('this.moveEntityNode(entityIds[i], event.target_tile_id)', $js);
+        $this->assertStringContainsString('this.moveEntityNode(entityIds[i], event.target_tile_id, true)', $js);
+        $this->assertStringContainsString('animateEntityMove', $js);
+        $this->assertStringContainsString('hns_entity_moving', self::readFile(dirname(__DIR__) . '/hacknslash.css'));
     }
 
     public function testClientAddsSummonedMonstersFromNotifications(): void
@@ -147,7 +186,7 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('this.placeEntity(entity, this.gamedatas.tiles || {})', $js);
     }
 
-    public function testClientMarksKilledMonstersDeadOnBoardAndCards(): void
+    public function testClientRemovesKilledEnemiesFromBoardAndCards(): void
     {
         $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
         $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
@@ -156,6 +195,11 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('updateEntityHealthBadge', $js);
         $this->assertStringContainsString("dojo.query('.hns_entity_health', node)", $js);
         $this->assertStringContainsString("event.type === 'afterKill'", $js);
+        $this->assertStringContainsString("'entityDamaged'", $js);
+        $this->assertStringContainsString("'entityDamaged' => ''", self::readFile(dirname(__DIR__) . '/modules/HNS_EventDispatcher.php'));
+        $this->assertStringContainsString("entity.type === 'monster' || entity.type === 'boss'", $js);
+        $this->assertStringContainsString('delete this.gamedatas.entities[entityId]', $js);
+        $this->assertStringContainsString('dojo.destroy(node)', $js);
         $this->assertStringContainsString('hns_entity_dead', $js);
         $this->assertStringContainsString('hns_monster_card_dead', $js);
         $this->assertStringContainsString('hns_monster_card_damaged', $js);
@@ -186,15 +230,18 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('highlightFreeMoveTiles', $js);
         $this->assertStringContainsString('scheduleFreeMoveHighlight', $js);
         $this->assertStringContainsString('canActivePlayerMove', $js);
+        $this->assertStringContainsString('isHeroHeldByAdjacentSlime', $js);
+        $this->assertStringContainsString('!this.isHeroHeldByAdjacentSlime()', $js);
+        $this->assertStringContainsString("parseInt(entity.type_arg || 0, 10) !== 2", $js);
         $this->assertStringContainsString('parseInt(player.free_move_available || 0, 10) === 1', $js);
         $this->assertStringContainsString('clearFreeMoveHighlights', $js);
         $this->assertStringContainsString('isFreeMoveTile', $js);
         $this->assertStringContainsString('hns_free_move_tile', $js);
         $this->assertStringContainsString('.hns_tile.hns_free_move_tile', $css);
-        $this->assertStringContainsString('.hns_tile.hns_free_move_tile::after', $css);
+        $this->assertStringNotContainsString('.hns_tile.hns_free_move_tile::after', $css);
     }
 
-    public function testClientHighlightsPowerTargetsAndAutoTargetsVortex(): void
+    public function testClientHighlightsPowerTargetsAndValidatesVortexSelection(): void
     {
         $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
         $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
@@ -208,20 +255,42 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('selectedPowerTileId', $js);
         $this->assertStringContainsString('selectedPowerTargetEntityIds', $js);
         $this->assertStringContainsString('togglePullTarget', $js);
-        $this->assertStringContainsString('maybePlayPullPower', $js);
+        $this->assertStringContainsString('updateConfirmTargetReticles', $js);
+        $this->assertStringContainsString('hns_target_count', $js);
+        $this->assertStringContainsString('hns_power_validate', $js);
+        $this->assertStringContainsString('hns_power_cancel', $js);
+        $this->assertStringContainsString('onValidatePowerSelection', $js);
+        $this->assertStringContainsString('onCancelPowerSelection', $js);
+        $this->assertStringContainsString('validatePowerSelection', $js);
+        $this->assertStringContainsString('updatePowerConfirmControls', $js);
+        $this->assertStringContainsString('clearSelectedPower', $js);
         $this->assertStringContainsString('isTileValidPowerTarget', $js);
         $this->assertStringContainsString("(power.range_metric || 'orthogonal') === 'orthogonal'", $js);
         $this->assertStringContainsString('String(from.x) !== String(tile.x) && String(from.y) !== String(tile.y)', $js);
         $this->assertStringContainsString('monsterIdOnTile', $js);
         $this->assertStringContainsString('payload.target_entity_id = targetEntityId', $js);
         $this->assertStringContainsString('this.isWalkableTile(tile) && !this.isTileOccupied(tile.id)', $js);
+        $this->assertStringContainsString("['floor', 'spikes'].indexOf(tile.type) !== -1", $js);
         $this->assertStringContainsString('this.monsterIdsAdjacentToTile(tile.id).length > 0', $js);
         $this->assertStringContainsString("join(' ')", $js);
         $this->assertStringContainsString("this.selectedPowerTileId = String(entity.tile_id)", $js);
         $this->assertStringContainsString("preg_split('/\\s+/'", $actions);
         $this->assertStringContainsString('.hns_tile.hns_power_target_tile', $css);
-        $this->assertStringContainsString('.hns_tile.hns_power_target_tile::after', $css);
+        $this->assertStringNotContainsString('.hns_tile.hns_power_target_tile::after', $css);
+        $this->assertStringContainsString('.hns_target_count', $css);
         $this->assertStringContainsString('z-index: 3', $css);
+        $this->assertStringContainsString('.hns_power_confirm', $css);
+        $this->assertStringContainsString('.hns_hidden', $css);
+        $this->assertStringContainsString('#hns_power_validate', $css);
+    }
+
+    public function testClickingSelectedPowerCardClearsSelection(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+
+        $this->assertStringContainsString('this.selectedPowerKey === powerKey', $js);
+        $this->assertStringContainsString('String(this.selectedPowerSlot || \'\') === String(slot || \'\')', $js);
+        $this->assertStringContainsString('this.clearSelectedPower();', $js);
     }
 
     public function testClientHighlightsMonsterAttackTilesOnMonsterClick(): void
@@ -236,7 +305,7 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('hns_monster_attack_tile', $js);
         $this->assertStringContainsString('monster.range_metric || \'orthogonal\'', $js);
         $this->assertStringContainsString('.hns_tile.hns_monster_attack_tile', $css);
-        $this->assertStringContainsString('.hns_tile.hns_monster_attack_tile::after', $css);
+        $this->assertStringNotContainsString('.hns_tile.hns_monster_attack_tile::after', $css);
     }
 
     public function testClientUpdatesActionStateAfterCardUse(): void
@@ -251,9 +320,9 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString("'power_key' => \$powerKey", $game);
         $this->assertStringContainsString('this.gamedatas.player_powers[args.player_power_id].power_key = args.power_key', $js);
         $this->assertStringContainsString('power_cooldown', $game);
-        $this->assertStringContainsString('isHeroPhaseEndingAfterActiveTurn', $game);
-        $this->assertStringContainsString('!$heroPhaseEnding', $game);
-        $this->assertStringContainsString('if ($this->isActivePlayerTurnSpent())', $game);
+        $this->assertStringContainsString('shouldEndActivePlayerTurn', $game);
+        $this->assertStringContainsString('!$shouldEndTurn', $game);
+        $this->assertStringContainsString('if ($shouldEndTurn)', $game);
         $this->assertStringContainsString("\$this->gamestate->nextState('endTurn');", $game);
     }
 
@@ -278,8 +347,12 @@ final class StructureTest extends TestCase
     {
         $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
         $player = self::readFile(dirname(__DIR__) . '/modules/HNS_Player.php');
+        $board = self::readFile(dirname(__DIR__) . '/modules/HNS_Board.php');
 
         $this->assertStringContainsString('roundStarted', $player);
+        $this->assertStringContainsString('deleteDeadEnemiesForCurrentLevel', $player);
+        $this->assertStringContainsString("entity_type IN ('monster', 'boss')", $board);
+        $this->assertStringContainsString("entity_state = 'dead' OR e.entity_health <= 0", $board);
         $this->assertStringContainsString('roundStarted', $js);
         $this->assertStringContainsString('notif_roundStarted', $js);
         $this->assertStringContainsString('this.gamedatas.players = args.players', $js);
@@ -339,25 +412,74 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('this.renderBoard(this.gamedatas.tiles, this.gamedatas.entities)', $js);
     }
 
-    public function testRewardChoiceCanReplaceOrUpgradeWithoutHidingHand(): void
+    public function testRewardChoiceUsesDedicatedUpgradeStateAndFocusesRewardUi(): void
     {
         $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
         $actions = self::readFile(dirname(__DIR__) . '/hacknslash.action.php');
         $states = self::readFile(dirname(__DIR__) . '/states.inc.php');
         $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
 
         $this->assertStringContainsString('actChooseReward', $states);
+        $this->assertStringContainsString('upgradeReward', $states);
+        $this->assertStringContainsString('actSkipReward', $states);
+        $this->assertStringContainsString("'upgradeReward' => 65", $states);
         $this->assertStringContainsString('function actChooseReward()', $actions);
+        $this->assertStringContainsString("\$_REQUEST['power_key']", $actions);
+        $this->assertStringContainsString("preg_match('/\\A[A-Za-z0-9_-]*\\z/'", $actions);
+        $this->assertStringContainsString('function actSkipReward()', $actions);
         $this->assertStringContainsString('public function actChooseReward', $game);
+        $this->assertStringContainsString('public function actSkipReward', $game);
+        $this->assertStringContainsString('argUpgradeReward', $game);
+        $this->assertStringContainsString('startNextLevelAfterReward', $game);
         $this->assertStringContainsString('HNS_LevelReward::takeOfferedPower', $game);
         $this->assertStringContainsString('HNS_LevelReward::upgradeExistingPower', $game);
         $this->assertStringContainsString('hns_reward_panel', $js);
+        $this->assertStringContainsString('updateRewardFocusState', $js);
+        $this->assertStringContainsString('hns_reward_focus', $js);
+        $this->assertStringContainsString('hns_panel_folded', $css);
         $this->assertStringContainsString('onRewardOfferClick', $js);
         $this->assertStringContainsString('onRewardUpgradeClick', $js);
         $this->assertStringContainsString('hns_reward_upgrade', $js);
         $this->assertStringContainsString('reward_upgrades', $game);
         $this->assertStringContainsString('onUpgradePowerClick', $js);
-        $this->assertStringNotContainsString('this.renderRewardOffer();\n        return;\n      }\n\n      var activePlayerId', $js);
+    }
+
+    public function testRewardStateChangesActionPromptAndShowsOnlySkip(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+        $states = self::readFile(dirname(__DIR__) . '/states.inc.php');
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+
+        $this->assertStringContainsString("'name' => 'upgradeReward'", $states);
+        $this->assertStringContainsString("'descriptionmyturn' => clienttranslate('\${you} may upgrade and pick a card')", $states);
+        $this->assertStringContainsString('isRewardPending', $game);
+        $this->assertStringContainsString('upgrade your character and pick a card', $game);
+        $this->assertStringContainsString("'reward_pending' => \$this->isRewardPending() ? 1 : 0", $game);
+        $this->assertStringContainsString("stateName === 'upgradeReward'", $js);
+        $this->assertStringContainsString("this.addActionButton('hns_skip_reward_button', _('Skip'), 'onSkipReward')", $js);
+        $this->assertStringContainsString("this.bgaPerformAction('actSkipReward')", $js);
+        $this->assertStringContainsString('onSkipReward', $js);
+    }
+
+    public function testBoardResizesToGeneratedTileGrid(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
+
+        $this->assertStringContainsString('resizeBoardToTiles', $js);
+        $this->assertStringContainsString('this.resizeBoardToTiles(tiles)', $js);
+        $this->assertStringContainsString('this.boardTileSize = 70', $js);
+        $this->assertStringContainsString('this.boardBorderTileSize = 36', $js);
+        $this->assertStringContainsString('tileBox', $js);
+        $this->assertStringContainsString('boardAxisOffset', $js);
+        $this->assertStringContainsString('tileBounds', $js);
+        $this->assertStringContainsString('width:${width}px; height:${height}px;', $js);
+        $this->assertStringContainsString("width: this.boardAxisOffset(bounds.maxX + 1, bounds.maxX) + 'px'", $js);
+        $this->assertStringContainsString("height: this.boardAxisOffset(bounds.maxY + 1, bounds.maxY) + 'px'", $js);
+        $this->assertStringContainsString('overflow: visible;', $css);
+        $this->assertStringContainsString('width: 70px;', $css);
+        $this->assertStringContainsString('height: 70px;', $css);
     }
 
     public function testOptionalActionsCanBeSkippedIndependently(): void
@@ -374,8 +496,46 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('public function actSkipFreeMove(): void', $game);
         $this->assertStringContainsString('public function actSkipMainAction(): void', $game);
         $this->assertStringContainsString('nextStateAfterOptionalActionSkip', $game);
+        $this->assertStringContainsString('shouldEndActivePlayerTurn', $game);
+        $this->assertStringContainsString('isPlayerFreeActionAvailable', $game);
+        $this->assertStringContainsString('free_action_available', $game);
+        $this->assertStringContainsString('Skip free action', $js);
         $this->assertStringContainsString('Skip free move', $js);
         $this->assertStringContainsString('Skip action', $js);
+    }
+
+    public function testMonsterAttacksAnimateTowardTheirTarget(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
+
+        $this->assertStringContainsString("'monsterAttack'", $js);
+        $this->assertStringContainsString('animateMonsterAttack', $js);
+        $this->assertStringContainsString('monsterStick', $js);
+        $this->assertStringContainsString('monsterCharge', $js);
+        $this->assertStringContainsString('monsterFrontArcAttack', $js);
+        $this->assertStringContainsString('actor_entity_ids', $js);
+        $this->assertStringContainsString('animateMonsterActorAttack', $js);
+        $this->assertStringContainsString('lungePosition', $js);
+        $this->assertStringContainsString('dojo.animateProperty', $js);
+        $this->assertStringContainsString('hns_entity_attacking', $js);
+        $this->assertStringContainsString('@keyframes hns_entity_attack_lunge', $css);
+        $this->assertStringContainsString('.hns_entity_attacking', $css);
+    }
+
+    public function testKamikazeExplosionAnimatesOnDeath(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
+
+        $this->assertStringContainsString('monsterExplode', $js);
+        $this->assertStringContainsString('animateMonsterExplosion', $js);
+        $this->assertStringContainsString('updateExplosionTargetHealth', $js);
+        $this->assertStringContainsString('target_health_by_entity_id', $js);
+        $this->assertStringContainsString('event.actor_entity_ids && event.actor_entity_ids.length', $js);
+        $this->assertStringContainsString('hns_entity_exploding', $js);
+        $this->assertStringContainsString('@keyframes hns_entity_explosion', $css);
+        $this->assertStringContainsString('.hns_entity_exploding::before', $css);
     }
 
     public function testTurnActionsAreValidatedAgainstRemainingActionFlags(): void
@@ -386,6 +546,20 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('Move is not available.', $game);
         $this->assertStringContainsString('Main action is not available.', $game);
         $this->assertStringContainsString('HNS_RoundEngine::consumeMove', $game);
+        $this->assertStringContainsString('Slimed heroes cannot move except with Dash.', $roundEngine = self::readFile(dirname(__DIR__) . '/modules/HNS_RoundEngine.php'));
+        $this->assertStringContainsString('isPlayerHeldByAdjacentSlime', $roundEngine);
+        $this->assertStringContainsString('clearExpiredSlimedStatuses', $roundEngine);
+        $this->assertStringContainsString('isHeroHeldByAdjacentSlimeEntity', $roundEngine);
+        $this->assertStringContainsString('clearExpiredSlimedStatus', $roundEngine);
+        $this->assertStringContainsString('hasSlimeStatus', $roundEngine);
+        $this->assertStringContainsString('(slimed|stuck|stick)', $roundEngine);
+        $this->assertStringContainsString('hasSlimeStatus', $js);
+        $this->assertStringContainsString('(slimed|stuck|stick)', $js);
+        $this->assertStringContainsString('clearExpiredSlimeStatuses', $js);
+        $this->assertStringContainsString('this.clearExpiredSlimeStatuses();', $js);
+        $this->assertStringContainsString('this.scheduleFreeMoveHighlight();', $js);
+        $this->assertStringContainsString('tiles/markers/slimed.webp', $js);
+        $this->assertStringContainsString('tiles/markers/shield.webp', $js);
         $this->assertStringContainsString('isActivePlayerMoveAvailable', $game);
         $this->assertStringContainsString('parseInt(player.action_points || 0, 10) > 0', $js);
     }

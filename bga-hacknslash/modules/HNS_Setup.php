@@ -153,7 +153,7 @@ trait HNS_Setup
 
     private function walkableTileIdForCoords(int $x, int $y, int $level): ?int
     {
-        $tileId = $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_x = $x AND tile_y = $y AND tile_level = $level AND tile_type IN ('floor', 'entry', 'exit', 'spikes') LIMIT 1");
+        $tileId = $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_x = $x AND tile_y = $y AND tile_level = $level AND tile_type IN ('floor', 'spikes') LIMIT 1");
 
         return $tileId === null ? null : (int) $tileId;
     }

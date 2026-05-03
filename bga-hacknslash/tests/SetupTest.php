@@ -94,7 +94,7 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('heroStartTileIdsForLevel', $setupSource);
         $this->assertStringContainsString('$playerCount <= 1', $setupSource);
         $this->assertStringContainsString('[[$anchorX - 1, $anchorY], [$anchorX + 1, $anchorY]]', $setupSource);
-        $this->assertStringContainsString("tile_type IN ('floor', 'entry', 'exit', 'spikes')", $setupSource);
+        $this->assertStringContainsString("tile_type IN ('floor', 'spikes')", $setupSource);
         $this->assertStringContainsString('moveHeroesToLevelStarts', $boardSource);
         $this->assertStringContainsString('moveHeroesToLevelStarts', $gameSource);
         $this->assertStringNotContainsString('moveHeroesToCurrentLevelEntry', $boardSource . $gameSource);
@@ -116,7 +116,8 @@ final class SetupTest extends TestCase
 
         $this->assertStringContainsString('deleteMonstersOutsideLevel', $boardSource);
         $this->assertStringContainsString("entity_type IN ('monster', 'boss')", $boardSource);
-        $this->assertStringContainsString('deleteMonstersOutsideLevel($level + 1)', $gameSource);
+        $this->assertStringContainsString('startNextLevelAfterReward', $gameSource);
+        $this->assertStringContainsString('deleteMonstersOutsideLevel($nextLevel)', $gameSource);
     }
 
     public function testInitialSetupDoesNotRandomlyGrantMonsterEnchantments(): void

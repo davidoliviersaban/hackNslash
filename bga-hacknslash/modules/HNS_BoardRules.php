@@ -2,7 +2,7 @@
 
 final class HNS_BoardRules
 {
-    private const WALKABLE_TILE_TYPES = ['floor', 'entry', 'exit', 'spikes'];
+    private const WALKABLE_TILE_TYPES = ['floor', 'spikes'];
 
     /**
      * @param array{x:int, y:int} $from

@@ -18,7 +18,7 @@ $bosses = [
                 'can_attack_and_move' => true,
             ],
             2 => [
-                'health' => 9,
+                'health' => 8,
                 'move' => 2,
                 'move_metric' => 'chebyshev',
                 'range' => 1,
@@ -33,7 +33,7 @@ $bosses = [
                 ],
             ],
             3 => [
-                'health' => 10,
+                'health' => 8,
                 'move' => 2,
                 'move_metric' => 'chebyshev',
                 'range' => 1,

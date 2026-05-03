@@ -24,6 +24,7 @@ trait HNS_Player
         $round = (int) $this->getGameStateValue('round_number') + 1;
         $this->setGameStateValue('round_number', $round);
         $this->clearFreeActionChain();
+        $this->deleteDeadEnemiesForCurrentLevel();
         $actionPoints = $this->mainActionPointsPerPlayer();
         $mainActionAvailable = $actionPoints > 0 ? 1 : 0;
         $this->DbQuery("UPDATE player SET player_free_move_available = 1, player_main_action_available = $mainActionAvailable, player_action_points = $actionPoints");

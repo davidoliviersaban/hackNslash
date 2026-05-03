@@ -15,6 +15,28 @@
   display: block;
 }
 
+#hns_wrap.hns_reward_focus {
+  grid-template-columns: 120px minmax(420px, 1fr) 300px;
+}
+
+#hns_wrap.hns_reward_focus #hns_reward_panel {
+  grid-row: 1;
+  min-height: 360px;
+}
+
+.hns_panel_folded {
+  max-height: 58px;
+  overflow: hidden;
+  opacity: 0.62;
+}
+
+.hns_panel_folded #hns_board,
+.hns_panel_folded .hns_event_list,
+.hns_panel_folded .hns_power_confirm,
+.hns_panel_folded #hns_board_hint {
+  display: none;
+}
+
 .hns_panel {
   background: linear-gradient(180deg, #211b18 0%, #151211 100%);
   border: 1px solid #5b4634;
@@ -46,8 +68,9 @@
 
 #hns_board {
   position: relative;
+  min-width: 520px;
   min-height: 520px;
-  overflow: auto;
+  overflow: visible;
   background:
     radial-gradient(circle at 50% 0%, rgba(92, 66, 45, 0.28), transparent 34%),
     #171717;
@@ -57,8 +80,8 @@
 
 .hns_tile {
   position: absolute;
-  width: 88px;
-  height: 88px;
+  width: 70px;
+  height: 70px;
   box-sizing: border-box;
   border: 1px solid #6f6153;
   background-color: #2c2926;
@@ -82,17 +105,6 @@
   z-index: 3;
 }
 
-.hns_tile.hns_free_move_tile::after,
-.hns_tile.hns_power_target_tile::after,
-.hns_tile.hns_monster_attack_tile::after {
-  content: '';
-  position: absolute;
-  inset: 4px;
-  border-radius: 8px;
-  pointer-events: none;
-  z-index: 3;
-}
-
 .hns_tile:hover {
   filter: brightness(1.18);
   transform: translateY(-1px);
@@ -112,37 +124,22 @@
 .hns_tile.hns_free_move_tile {
   outline: 4px solid #70d66b;
   outline-offset: -4px;
-  box-shadow: inset 0 0 0 2px rgba(10, 35, 18, 0.65), 0 0 14px rgba(112, 214, 107, 0.65);
+  box-shadow: 0 0 14px rgba(112, 214, 107, 0.65);
   filter: brightness(1.2) saturate(1.2);
-}
-
-.hns_tile.hns_free_move_tile::after {
-  border: 3px solid #70d66b;
-  box-shadow: inset 0 0 0 2px rgba(10, 35, 18, 0.65), 0 0 18px rgba(112, 214, 107, 0.85);
 }
 
 .hns_tile.hns_power_target_tile {
   outline: 4px solid #8fc7ff;
   outline-offset: -4px;
-  box-shadow: inset 0 0 0 2px rgba(12, 33, 58, 0.7), 0 0 16px rgba(95, 177, 255, 0.7);
+  box-shadow: 0 0 16px rgba(95, 177, 255, 0.7);
   filter: brightness(1.18) saturate(1.25);
-}
-
-.hns_tile.hns_power_target_tile::after {
-  border: 3px solid #8fc7ff;
-  box-shadow: inset 0 0 0 2px rgba(12, 33, 58, 0.7), 0 0 18px rgba(95, 177, 255, 0.9);
 }
 
 .hns_tile.hns_monster_attack_tile {
   outline: 4px solid #ff6f5f;
   outline-offset: -4px;
-  box-shadow: inset 0 0 0 2px rgba(73, 18, 12, 0.7), 0 0 16px rgba(255, 80, 64, 0.7);
+  box-shadow: 0 0 16px rgba(255, 80, 64, 0.7);
   filter: brightness(1.14) saturate(1.25);
-}
-
-.hns_tile.hns_monster_attack_tile::after {
-  border: 3px solid #ff6f5f;
-  box-shadow: inset 0 0 0 2px rgba(73, 18, 12, 0.7), 0 0 18px rgba(255, 80, 64, 0.9);
 }
 
 .hns_entity.hns_power_target_entity {
@@ -156,8 +153,8 @@
 
 .hns_entity {
   position: absolute;
-  width: 42px;
-  height: 42px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 2px solid #f5ead8;
   background: #29374a;
@@ -175,32 +172,94 @@
   transform: translate(-50%, -50%) scale(1.08);
 }
 
+.hns_target_count {
+  position: absolute;
+  right: -8px;
+  top: -10px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #f6c85f;
+  color: #1c1410;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px rgba(28, 20, 16, 0.85), 0 0 10px rgba(246, 200, 95, 0.8);
+  pointer-events: none;
+}
+
+.hns_entity_attacking {
+  animation: hns_entity_attack_lunge 460ms cubic-bezier(0.2, 0.9, 0.24, 1.18);
+  z-index: 8;
+}
+
+.hns_entity_moving {
+  animation: hns_entity_slide 520ms cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 8;
+}
+
+.hns_entity_exploding::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(255, 238, 145, 0.95) 0%, rgba(255, 129, 47, 0.88) 42%, rgba(186, 31, 20, 0.15) 72%, transparent 100%);
+  transform: translate(-50%, -50%) scale(0.35);
+  animation: hns_entity_explosion 520ms ease-out;
+  pointer-events: none;
+  z-index: 7;
+}
+
+@keyframes hns_entity_attack_lunge {
+  0% { transform: translate(-50%, -50%); }
+  40% { transform: translate(-50%, -50%) scale(1.18); filter: brightness(1.28); }
+  70% { transform: translate(-50%, -50%) scale(1.06); filter: brightness(1.12); }
+  100% { transform: translate(-50%, -50%); }
+}
+
+@keyframes hns_entity_slide {
+  0% { transform: translate(-50%, -50%) scale(0.94); filter: brightness(1.25); }
+  70% { transform: translate(-50%, -50%) scale(1.08); filter: brightness(1.18); }
+  100% { transform: translate(-50%, -50%) scale(1); filter: none; }
+}
+
+@keyframes hns_entity_explosion {
+  0% { opacity: 0.9; transform: translate(-50%, -50%) scale(0.35); }
+  70% { opacity: 0.85; transform: translate(-50%, -50%) scale(2.4); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(3.1); }
+}
+
 .hns_entity_monster {
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   background: transparent;
   border-color: transparent;
 }
 
 .hns_entity_monster img {
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   max-width: none;
-  transform: translate(-8px, -8px);
+  transform: translate(-6px, -6px);
 }
 
 .hns_entity_boss {
-  width: 70px;
-  height: 70px;
+  width: 56px;
+  height: 56px;
   background: transparent;
   border-color: transparent;
 }
 
 .hns_entity_boss img {
-  width: 70px;
-  height: 70px;
+  width: 56px;
+  height: 56px;
   max-width: none;
-  transform: translate(-14px, -14px);
+  transform: translate(-11px, -11px);
 }
 
 .hns_entity_dead {
@@ -395,6 +454,42 @@
   min-height: 96px;
 }
 
+.hns_hidden {
+  display: none !important;
+}
+
+.hns_power_confirm {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(246, 200, 95, 0.5);
+  border-radius: 8px;
+  background: rgba(24, 19, 17, 0.9);
+  color: #f5ead8;
+  font-size: 13px;
+}
+
+.hns_power_confirm button {
+  border: 0;
+  border-radius: 999px;
+  padding: 5px 10px;
+  background: #6f4f2c;
+  color: #fff4e8;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.hns_power_confirm button:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.8) brightness(0.7);
+}
+
+#hns_power_validate {
+  background: #2f6f4e;
+}
+
 .hns_event_list {
   display: grid;
   gap: 6px;
@@ -417,9 +512,9 @@
 
 #hns_cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(120px, 1fr));
-  gap: 12px;
-  min-height: 150px;
+  grid-template-columns: repeat(2, minmax(96px, 1fr));
+  gap: 8px;
+  min-height: 120px;
 }
 
 .hns_power_card {

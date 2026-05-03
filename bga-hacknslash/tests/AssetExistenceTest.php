@@ -82,6 +82,10 @@ final class AssetExistenceTest extends TestCase
             'tiles/levels/floor-1.webp',
             'tiles/levels/floor-2.webp',
             'tiles/levels/floor-3.webp',
+            'tiles/levels/wall-top-left.webp',
+            'tiles/levels/wall-top-right.webp',
+            'tiles/levels/wall-bottom-left.webp',
+            'tiles/levels/wall-bottom-right.webp',
             'tiles/levels/wall-top.webp',
             'tiles/levels/wall-bottom.webp',
             'tiles/levels/wall-left.webp',
@@ -100,6 +104,12 @@ final class AssetExistenceTest extends TestCase
                 "Level asset $relative is missing on disk"
             );
         }
+
+        $this->assertLessThan(
+            strpos($js, "return 'tiles/levels/wall--left-right.webp'"),
+            strpos($js, "return 'tiles/levels/wall-top-left.webp'"),
+            'Corner wall variants must be tested before straight wall variants.'
+        );
     }
 
     public function testMonsterTileAssetsAreAllReferenced(): void
@@ -165,8 +175,8 @@ final class AssetExistenceTest extends TestCase
         $this->assertStringContainsString('background: transparent;', $css);
         $this->assertStringContainsString('border-color: transparent;', $css);
         $this->assertStringContainsString('.hns_entity_monster img {', $css);
-        $this->assertStringContainsString('width: 58px;', $css);
-        $this->assertStringContainsString('height: 58px;', $css);
+        $this->assertStringContainsString('width: 46px;', $css);
+        $this->assertStringContainsString('height: 46px;', $css);
     }
 
     public function testBossEntitiesRenderWithSlasherPixelSprite(): void
@@ -188,6 +198,7 @@ final class AssetExistenceTest extends TestCase
 
         $this->assertStringNotContainsString("replace(/_\\d+$/, '')", $js);
         $this->assertStringNotContainsString("+ '-1.webp'", $js);
-        $this->assertStringContainsString("files[powerKey] || 'cards/powers/powers-1.webp'", $js);
+        $this->assertStringNotContainsString('cards/powers/powers-1.webp', $js);
+        $this->assertStringContainsString("files[powerKey] || 'cards/powers/attack-0.webp'", $js);
     }
 }

@@ -8,19 +8,23 @@ require_once dirname(__DIR__) . '/modules/HNS_MonsterAi.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelGenerator.php';
 require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelReward.php';
+require_once dirname(__DIR__) . '/modules/HNS_BossEngine.php';
 require_once dirname(__DIR__) . '/modules/HNS_GameEngine.php';
 require_once dirname(__DIR__) . '/modules/HNS_RoundEngine.php';
 
 final class RoundEngineTest extends TestCase
 {
     private array $monsters;
+    private array $bosses;
     private array $powers;
 
     protected function setUp(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
         $this->monsters = $monsters;
+        $this->bosses = $bosses;
         $this->powers = $bonus_cards;
     }
 
@@ -42,6 +46,66 @@ final class RoundEngineTest extends TestCase
 
         $this->assertSame(2, $state['players'][1]['action_points']);
         $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testStartRoundRemovesDeadEnemiesButKeepsHeroes(): void
+    {
+        $state = [
+            'players' => [1 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0]],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'health' => 0, 'state' => 'dead'],
+                20 => ['id' => 20, 'type' => 'monster', 'health' => 0, 'state' => 'dead'],
+                21 => ['id' => 21, 'type' => 'monster', 'health' => 1, 'state' => 'active'],
+                30 => ['id' => 30, 'type' => 'boss', 'health' => 0, 'state' => 'dead'],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::startRound($state);
+
+        $this->assertArrayHasKey(10, $state['entities']);
+        $this->assertArrayNotHasKey(20, $state['entities']);
+        $this->assertArrayHasKey(21, $state['entities']);
+        $this->assertArrayNotHasKey(30, $state['entities']);
+    }
+
+    public function testStartRoundClearsSlimedStatusWhenNoActiveSlimeIsAdjacent(): void
+    {
+        $state = [
+            'players' => [1 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0]],
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+                3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'floor'],
+            ],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'slimed'],
+                20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 2, 'tile_id' => 2, 'state' => 'dead'],
+                21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 2, 'tile_id' => 3, 'state' => 'active'],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::startRound($state);
+
+        $this->assertNull($state['entities'][10]['status']);
+    }
+
+    public function testStartRoundKeepsSlimedStatusWhenActiveSlimeIsAdjacent(): void
+    {
+        $state = [
+            'players' => [1 => ['free_move_available' => false, 'main_action_available' => false, 'action_points' => 0]],
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+            ],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'slimed'],
+                20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 2, 'tile_id' => 2, 'state' => 'active'],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::startRound($state);
+
+        $this->assertSame('slimed', $state['entities'][10]['status']);
     }
 
     public function testMultiplayerStartsWithOneMainActionPointPerPlayer(): void
@@ -102,6 +166,66 @@ final class RoundEngineTest extends TestCase
         $this->assertFalse($state['players'][1]['free_move_available']);
         $this->assertSame(2, $state['players'][1]['action_points']);
         $this->assertTrue($state['players'][1]['main_action_available']);
+    }
+
+    public function testSlimedHeroCannotUseNormalMove(): void
+    {
+        $state = [
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+            ],
+            'players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]],
+            'entities' => [
+                10 => ['type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'slimed'],
+                20 => ['type' => 'monster', 'type_arg' => 2, 'tile_id' => 2, 'state' => 'active'],
+            ],
+        ];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Slimed heroes cannot move except with Dash.');
+
+        HNS_RoundEngine::consumeMove($state, 1);
+    }
+
+    public function testSlimedHeroCanMoveWhenNoSlimeIsAdjacent(): void
+    {
+        $state = [
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'floor'],
+            ],
+            'players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]],
+            'entities' => [
+                10 => ['type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'slimed'],
+                20 => ['type' => 'monster', 'type_arg' => 2, 'tile_id' => 3, 'state' => 'active'],
+            ],
+        ];
+
+        $state = HNS_RoundEngine::consumeMove($state, 1);
+
+        $this->assertNull($state['entities'][10]['status']);
+        $this->assertFalse($state['players'][1]['free_move_available']);
+    }
+
+    public function testLegacyStuckHeroCannotMoveWhileSlimeIsAdjacent(): void
+    {
+        $state = [
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+            ],
+            'players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]],
+            'entities' => [
+                10 => ['type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'stuck'],
+                20 => ['type' => 'monster', 'type_arg' => 2, 'tile_id' => 2, 'state' => 'active'],
+            ],
+        ];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Slimed heroes cannot move except with Dash.');
+
+        HNS_RoundEngine::consumeMove($state, 1);
     }
 
     public function testDbIntegerFreeMoveFlagIsConsumedAsFreeMove(): void
@@ -216,7 +340,65 @@ final class RoundEngineTest extends TestCase
         $result = HNS_RoundEngine::activateTraps($state);
 
         $this->assertSame(9, $result['state']['entities'][10]['health']);
-        $this->assertSame([['type' => 'trapDamage', 'target_entity_id' => 10, 'damage' => 1]], $result['events']);
+        $this->assertSame([['type' => 'trapDamage', 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9]], $result['events']);
+    }
+
+    public function testTrapStepDamagesMonstersOnSpikes(): void
+    {
+        $state = [
+            'tiles' => [1 => ['id' => 1, 'type' => 'spikes']],
+            'entities' => [20 => ['id' => 20, 'type' => 'monster', 'tile_id' => 1, 'health' => 2, 'state' => 'active']],
+        ];
+
+        $result = HNS_RoundEngine::activateTraps($state);
+
+        $this->assertSame(1, $result['state']['entities'][20]['health']);
+        $this->assertSame([['type' => 'trapDamage', 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1]], $result['events']);
+    }
+
+    public function testTrapStepCanKillMonstersOnSpikes(): void
+    {
+        $state = [
+            'tiles' => [1 => ['id' => 1, 'type' => 'spikes']],
+            'entities' => [20 => ['id' => 20, 'type' => 'monster', 'tile_id' => 1, 'health' => 1, 'state' => 'active']],
+        ];
+
+        $result = HNS_RoundEngine::activateTraps($state);
+
+        $this->assertSame(0, $result['state']['entities'][20]['health']);
+        $this->assertSame('dead', $result['state']['entities'][20]['state']);
+        $this->assertSame([['type' => 'trapDamage', 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 0]], $result['events']);
+    }
+
+    public function testTrapStepAdvancesBossPhaseInsteadOfLeavingBossDead(): void
+    {
+        $state = [
+            'bosses' => $this->bosses,
+            'tiles' => [1 => ['id' => 1, 'type' => 'spikes']],
+            'entities' => [900 => ['id' => 900, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 1, 'tile_id' => 1, 'health' => 1, 'state' => 'active']],
+        ];
+
+        $result = HNS_RoundEngine::activateTraps($state);
+
+        $this->assertSame('active', $result['state']['entities'][900]['state']);
+        $this->assertSame(2, $result['state']['entities'][900]['phase']);
+        $this->assertSame(8, $result['state']['entities'][900]['health']);
+        $this->assertSame(['trapDamage', 'bossPhaseDefeated', 'bossPhaseStarted'], array_column($result['events'], 'type'));
+    }
+
+    public function testTrapStepWinsGameWhenItKillsFinalBossPhase(): void
+    {
+        $state = [
+            'bosses' => $this->bosses,
+            'tiles' => [1 => ['id' => 1, 'type' => 'spikes']],
+            'entities' => [900 => ['id' => 900, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 3, 'tile_id' => 1, 'health' => 1, 'state' => 'active']],
+        ];
+
+        $result = HNS_RoundEngine::activateTraps($state);
+
+        $this->assertSame('dead', $result['state']['entities'][900]['state']);
+        $this->assertTrue($result['state']['game_won']);
+        $this->assertSame(['trapDamage', 'bossPhaseDefeated', 'gameWon'], array_column($result['events'], 'type'));
     }
 
     public function testGameIsLostWhenAnyHeroHasZeroHealth(): void
