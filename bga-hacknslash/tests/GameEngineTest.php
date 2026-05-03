@@ -8,6 +8,7 @@ require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 require_once dirname(__DIR__) . '/modules/HNS_BoardRules.php';
 require_once dirname(__DIR__) . '/modules/HNS_MonsterAi.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelReward.php';
+require_once dirname(__DIR__) . '/modules/HNS_BossEngine.php';
 require_once dirname(__DIR__) . '/modules/HNS_GameEngine.php';
 
 final class GameEngineTest extends TestCase
@@ -39,13 +40,21 @@ final class GameEngineTest extends TestCase
         }
     }
 
-    public function testBossLevelDoesNotGenerateRoomMonsterSlots(): void
+    public function testBossLevelGeneratesRoomAndSlasherEntityWithoutMonsterSlots(): void
     {
         $state = HNS_GameEngine::createLevel(8, 123, $this->monsters, array_keys($this->monsters));
 
         $this->assertTrue($state['is_boss_level']);
         $this->assertSame([], $state['monster_slots']);
-        $this->assertSame([], $state['entities']);
+        $this->assertNotEmpty($state['layout']['terrain']);
+        $this->assertNotEmpty($state['tiles']);
+        $this->assertSame('boss', $state['entities'][900]['type']);
+        $this->assertSame('slasher', $state['entities'][900]['boss_key']);
+        $this->assertSame(1, $state['entities'][900]['phase']);
+        $this->assertTrue(HNS_BoardRules::isTileWalkable($state['tiles'][$state['entities'][900]['tile_id']]));
+        foreach ($state['entities'] as $entity) {
+            $this->assertNotSame('monster', $entity['type']);
+        }
     }
 
     public function testLevelsSixAndSevenCreateRoomsWithoutExceedingSmallOrLargeSlotCapacity(): void

@@ -3,6 +3,7 @@
 trait HNS_Setup
 {
     private const HNS_STARTING_POWER_KEYS = ['strike', 'attack', 'attack'];
+    private const HNS_BOSS_FIGHT_POWER_KEYS = ['dash_3', 'vortex_2'];
 
     protected function setupStaticCards(): void
     {
@@ -56,7 +57,8 @@ trait HNS_Setup
         $coordsToTileId = $this->loadCoordsToTileIdMap($level);
 
         foreach ($levelState['entities'] as $entity) {
-            $monsterId = (int) $entity['type_arg'];
+            $type = (string) ($entity['type'] ?? 'monster');
+            $monsterId = (int) ($entity['type_arg'] ?? 0);
             $health = (int) $entity['health'];
             $size = $this->hns_sql_escape((string) ($entity['monster_size'] ?? 'small'));
             $onDeath = $this->hns_sql_nullable_string($entity['on_death'] ?? null);
@@ -66,6 +68,13 @@ trait HNS_Setup
             $tileX = (int) ($levelState['tiles'][$entity['tile_id']]['x'] ?? 0);
             $tileY = (int) ($levelState['tiles'][$entity['tile_id']]['y'] ?? 0);
             $tileId = $coordsToTileId["$tileX,$tileY"] ?? $this->tileIdForCoords($tileX, $tileY, $level);
+            if ($type === 'boss') {
+                $bossKey = $this->hns_sql_nullable_string($entity['boss_key'] ?? null);
+                $phase = (int) ($entity['phase'] ?? 1);
+                $this->DbQuery("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_boss_key, entity_phase, entity_has_shield, entity_shield_broken) VALUES ('boss', $monsterId, $tileId, $health, '$size', $bossKey, $phase, $hasShield, $shieldBroken)");
+                continue;
+            }
+
             $this->DbQuery("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_on_death, entity_has_shield, entity_shield_broken, entity_slot) VALUES ('monster', $monsterId, $tileId, $health, '$size', $onDeath, $hasShield, $shieldBroken, $slot)");
         }
     }
@@ -95,18 +104,19 @@ trait HNS_Setup
         return (int) $this->getUniqueValueFromDB("SELECT tile_id FROM tile WHERE tile_x = $x AND tile_y = $y AND tile_level = $level");
     }
 
-    protected function initializePlayers(array $playerIds): void
+    protected function initializePlayers(array $playerIds, int $level = HNS_FIRST_LEVEL, int $health = HNS_DEFAULT_HEALTH, ?array $powerKeys = null): void
     {
-        $startTileIds = $this->heroStartTileIdsForLevel(HNS_FIRST_LEVEL, count($playerIds));
+        $startTileIds = $this->heroStartTileIdsForLevel($level, count($playerIds));
         $actionPoints = count($playerIds) <= 1 ? HNS_SOLO_ACTION_POINTS : HNS_MULTIPLAYER_ACTION_POINTS;
+        $powerKeys = $powerKeys ?? self::HNS_STARTING_POWER_KEYS;
 
         foreach (array_values($playerIds) as $index => $playerId) {
             $playerId = (int) $playerId;
             $tileId = $startTileIds[$index] ?? $startTileIds[0];
-            $this->DbQuery('UPDATE player SET player_health = ' . HNS_DEFAULT_HEALTH . ", player_action_points = $actionPoints, player_main_action_available = 1 WHERE player_id = $playerId");
-            $this->DbQuery("INSERT INTO entity (entity_type, entity_owner, entity_tile_id, entity_health) VALUES ('hero', $playerId, $tileId, " . HNS_DEFAULT_HEALTH . ")");
+            $this->DbQuery("UPDATE player SET player_health = $health, player_action_points = $actionPoints, player_main_action_available = 1 WHERE player_id = $playerId");
+            $this->DbQuery("INSERT INTO entity (entity_type, entity_owner, entity_tile_id, entity_health) VALUES ('hero', $playerId, $tileId, $health)");
             $this->syncPlayerPositionFromTile($playerId, $tileId);
-            $this->initializePlayerPowers($playerId);
+            $this->initializePlayerPowers($playerId, $powerKeys);
         }
     }
 
@@ -160,9 +170,14 @@ trait HNS_Setup
         $this->DbQuery("UPDATE player SET player_position_x = $x, player_position_y = $y WHERE player_id = $playerId");
     }
 
-    protected function initializePlayerPowers(int $playerId): void
+    protected function bossFightStartingPowers(): array
     {
-        foreach (self::HNS_STARTING_POWER_KEYS as $slot => $powerKey) {
+        return self::HNS_BOSS_FIGHT_POWER_KEYS;
+    }
+
+    protected function initializePlayerPowers(int $playerId, ?array $powerKeys = null): void
+    {
+        foreach (($powerKeys ?? self::HNS_STARTING_POWER_KEYS) as $slot => $powerKey) {
             $powerSlot = $slot + 1;
             $this->DbQuery("INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown) VALUES ($playerId, $powerSlot, '$powerKey', 0)");
         }

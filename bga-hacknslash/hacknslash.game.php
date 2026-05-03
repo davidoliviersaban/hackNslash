@@ -66,14 +66,19 @@ class Hacknslash extends \Bga\GameFramework\Table
             $this->bga->playerScore->set((int) $playerId, 0);
         }
 
-        $this->setGameStateInitialValue('current_level', HNS_FIRST_LEVEL);
+        $difficulty = (int) ($options[101] ?? HNS_DIFFICULTY_NORMAL);
+        $startLevel = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_LEVEL : HNS_FIRST_LEVEL;
+        $startingHealth = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_FIGHT_HEALTH : HNS_DEFAULT_HEALTH;
+        $startingPowers = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? $this->bossFightStartingPowers() : null;
+
+        $this->setGameStateInitialValue('current_level', $startLevel);
         $this->setGameStateInitialValue('selected_tile', 0);
         $this->setGameStateInitialValue('pending_action', 0);
         $this->setGameStateInitialValue('round_number', 1);
 
         $this->setupStaticCards();
-        $this->setupInitialBoard(HNS_FIRST_LEVEL);
-        $this->initializePlayers(array_keys($players));
+        $this->setupInitialBoard($startLevel);
+        $this->initializePlayers(array_keys($players), $startLevel, $startingHealth, $startingPowers);
 
         $this->gamestate->changeActivePlayer((int) array_key_first($players));
 

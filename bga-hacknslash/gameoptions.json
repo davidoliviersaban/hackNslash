@@ -9,7 +9,8 @@
   "101": {
     "name": "Difficulty",
     "values": {
-      "1": { "name": "Normal" }
+      "1": { "name": "Normal" },
+      "2": { "name": "Boss fight" }
     },
     "default": 1
   }

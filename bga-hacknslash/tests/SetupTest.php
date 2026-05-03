@@ -22,6 +22,21 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown)', $setupSource);
     }
 
+    public function testBossFightDifficultyStartsAtBossWithBoostedHeroes(): void
+    {
+        $options = self::readFile(dirname(__DIR__) . '/gameoptions.json');
+        $constants = self::readFile(dirname(__DIR__) . '/modules/material/constants.inc.php');
+        $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
+        $gameSource = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+
+        $this->assertStringContainsString('"2": { "name": "Boss fight" }', $options);
+        $this->assertStringContainsString('const HNS_DIFFICULTY_BOSS_FIGHT = 2;', $constants);
+        $this->assertStringContainsString('const HNS_BOSS_FIGHT_HEALTH = 100;', $constants);
+        $this->assertStringContainsString("private const HNS_BOSS_FIGHT_POWER_KEYS = ['dash_3', 'vortex_2'];", $setupSource);
+        $this->assertStringContainsString('$startLevel = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_LEVEL : HNS_FIRST_LEVEL;', $gameSource);
+        $this->assertStringContainsString('$startingHealth = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_FIGHT_HEALTH : HNS_DEFAULT_HEALTH;', $gameSource);
+    }
+
     public function testSetupUsesGeneratedLevelAndPersistsMonsterAbilities(): void
     {
         $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
@@ -30,6 +45,17 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('level_monster_abilities', $setupSource);
         $this->assertStringContainsString('entity_monster_size', $setupSource);
         $this->assertStringContainsString('entity_on_death', $setupSource);
+    }
+
+    public function testSetupPersistsBossEntitiesSeparatelyFromMonsters(): void
+    {
+        $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
+        $gameEngineSource = self::readFile(dirname(__DIR__) . '/modules/HNS_GameEngine.php');
+
+        $this->assertStringContainsString('$type === \'boss\'', $setupSource);
+        $this->assertStringContainsString("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_boss_key, entity_phase", $setupSource);
+        $this->assertStringContainsString("HNS_BossEngine::initialBossEntity('slasher'", $gameEngineSource);
+        $this->assertStringContainsString("'layout' => \$layout", $gameEngineSource);
     }
 
     public function testPersistEngineStateSynchronizesHeroHealthToPlayer(): void

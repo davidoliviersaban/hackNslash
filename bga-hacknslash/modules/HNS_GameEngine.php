@@ -11,16 +11,22 @@ final class HNS_GameEngine
     public static function createLevel(int $levelNumber, int $seed, array $monsterMaterial, array $monsterDeck, array $enchantmentDeck = []): array
     {
         if ($levelNumber === HNS_BOSS_LEVEL) {
+            $layout = HNS_LevelGenerator::generate(7, $seed);
+            $tiles = self::tilesFromLayout($layout);
+            $bossStart = $layout['monster_starts'][0] ?? null;
+            $bossTileId = $bossStart === null ? self::firstWalkableTileId($tiles) : self::tileIdFor((int) $bossStart['x'], (int) $bossStart['y']);
+
             return [
                 'level' => $levelNumber,
                 'is_boss_level' => true,
                 'level_monster_abilities' => [],
-                'tiles' => [],
-                'entities' => [],
-            'monster_slots' => [],
-            'reward_offer' => [],
-            'reward_upgrades' => [],
-        ];
+                'layout' => $layout,
+                'tiles' => $tiles,
+                'entities' => [900 => HNS_BossEngine::initialBossEntity('slasher', 900, (int) $bossTileId, ['slasher' => self::slasherBossMaterial()])],
+                'monster_slots' => [],
+                'reward_offer' => [],
+                'reward_upgrades' => [],
+            ];
         }
 
         $layout = HNS_LevelGenerator::generate($levelNumber <= 3 ? 5 : 7, $seed);
@@ -55,6 +61,16 @@ final class HNS_GameEngine
             'level_monster_abilities' => $abilities,
             'reward_offer' => [],
             'reward_upgrades' => [],
+        ];
+    }
+
+    /** @return array<string, mixed> */
+    private static function slasherBossMaterial(): array
+    {
+        return [
+            'phases' => [
+                1 => ['health' => 8],
+            ],
         ];
     }
 
@@ -293,5 +309,17 @@ final class HNS_GameEngine
     private static function tileIdFor(int $x, int $y): int
     {
         return ($y * 100) + $x + 1;
+    }
+
+    /** @param array<int, array<string, mixed>> $tiles */
+    private static function firstWalkableTileId(array $tiles): int
+    {
+        foreach ($tiles as $tileId => $tile) {
+            if (HNS_BoardRules::isTileWalkable($tile)) {
+                return (int) $tileId;
+            }
+        }
+
+        return (int) array_key_first($tiles);
     }
 }
