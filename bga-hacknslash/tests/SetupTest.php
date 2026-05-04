@@ -19,7 +19,7 @@ final class SetupTest extends TestCase
         $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
 
         $this->assertStringContainsString("private const HNS_STARTING_POWER_KEYS = ['strike', 'attack', 'attack'];", $setupSource);
-        $this->assertStringContainsString('INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown)', $setupSource);
+        $this->assertStringContainsString('INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown, power_plays_remaining)', $setupSource);
     }
 
     public function testBossFightDifficultyStartsAtBossWithBoostedHeroes(): void

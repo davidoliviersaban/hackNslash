@@ -83,15 +83,15 @@ final class HNS_RoomSlotPattern
             }
 
             $size = $content['size'] ?? null;
-            if ($size === 'large' && !self::isEvenSlot($slot)) {
-                $errors[] = "slot $slot cannot contain a large monster";
+            if ($size === 'big' && !self::isEvenSlot($slot)) {
+                $errors[] = "slot $slot cannot contain a big monster";
             }
 
             if ($size === 'small' && self::isEvenSlot($slot)) {
                 $errors[] = "slot $slot cannot contain a small monster";
             }
 
-            if ($size !== 'large' && $size !== 'small') {
+            if ($size !== 'big' && $size !== 'small') {
                 $errors[] = "slot $slot has an unknown monster size";
             }
         }
@@ -110,7 +110,7 @@ final class HNS_RoomSlotPattern
 
     private static function isValidMonsterSlot(?string $size, int $slot): bool
     {
-        if ($size === 'large') {
+        if ($size === 'big') {
             return self::isEvenSlot($slot);
         }
 

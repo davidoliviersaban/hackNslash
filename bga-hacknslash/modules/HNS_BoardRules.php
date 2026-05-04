@@ -3,6 +3,7 @@
 final class HNS_BoardRules
 {
     private const WALKABLE_TILE_TYPES = ['floor', 'spikes'];
+    private const LINE_OF_SIGHT_BLOCKING_TILE_TYPES = ['wall', 'pillar'];
 
     /**
      * @param array{x:int, y:int} $from
@@ -126,7 +127,7 @@ final class HNS_BoardRules
     private static function hasBlockingTileAt(int $x, int $y, array $tiles): bool
     {
         foreach ($tiles as $tile) {
-            if ((int) ($tile['x'] ?? 0) === $x && (int) ($tile['y'] ?? 0) === $y && !self::isTileWalkable($tile)) {
+            if ((int) ($tile['x'] ?? 0) === $x && (int) ($tile['y'] ?? 0) === $y && in_array($tile['type'] ?? null, self::LINE_OF_SIGHT_BLOCKING_TILE_TYPES, true)) {
                 return true;
             }
         }
@@ -217,5 +218,47 @@ final class HNS_BoardRules
         }
 
         return $smallMonsters < 2;
+    }
+
+    // -----------------------------------------------------------------
+    //  State lookup helpers (shared by MonsterAi, PowerResolver, etc.)
+    // -----------------------------------------------------------------
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public static function assertEntityExists(array $state, int $entityId): void
+    {
+        if (!isset($state['entities'][$entityId])) {
+            throw new InvalidArgumentException("Unknown entity $entityId.");
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     */
+    public static function assertTileExists(array $state, int $tileId): void
+    {
+        if (!isset($state['tiles'][$tileId])) {
+            throw new InvalidArgumentException("Unknown tile $tileId.");
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>
+     */
+    public static function entityTile(array $state, int $entityId): array
+    {
+        self::assertEntityExists($state, $entityId);
+        $tileId = (int) $state['entities'][$entityId]['tile_id'];
+        self::assertTileExists($state, $tileId);
+
+        return $state['tiles'][$tileId];
+    }
+
+    public static function hasSlimeStatus(string $status): bool
+    {
+        return preg_match('/(^|\s)slimed(\s|$)/', $status) === 1;
     }
 }

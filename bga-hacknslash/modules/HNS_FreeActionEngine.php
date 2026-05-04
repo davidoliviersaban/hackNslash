@@ -6,11 +6,9 @@ final class HNS_FreeActionEngine
     public const EVENT_AFTER_DASH = 'afterDash';
     public const EVENT_AFTER_PUSH_OR_PULL = 'afterPushOrPull';
     public const EVENT_AFTER_KILL = 'afterKill';
-    public const EVENT_AFTER_SHIELD_BREAK = 'afterShieldBreak';
     public const EVENT_AFTER_CARD_PLAYED = 'afterCardPlayed';
     public const EVENT_AFTER_DASH_ATTACK = 'afterDashAttack';
     public const EVENT_ENTITY_DAMAGED = 'entityDamaged';
-    public const EVENT_AFTER_TRAP = 'afterTrap';
 
     /** @var array<int, array<string, mixed>> */
     private array $activeEventChain;
@@ -30,14 +28,20 @@ final class HNS_FreeActionEngine
 
     /**
      * @param array<int, string> $triggerEvents
+     *
+     * Note: a positive $playsRemaining lets a multi-plays power chain its
+     * remaining executions even if the power's own cooldown is already
+     * pending (the cooldown was committed by the first play). The
+     * usedActionKeys still blocks normal re-triggering, but a positive
+     * playsRemaining means the same power explicitly has another execution.
      */
-    public function canUseFreeAction(string $actionKey, array $triggerEvents, int $cooldown): bool
+    public function canUseFreeAction(string $actionKey, array $triggerEvents, int $cooldown, int $playsRemaining = 0): bool
     {
-        if ($cooldown > 0) {
+        if ($cooldown > 0 && $playsRemaining <= 0) {
             return false;
         }
 
-        if (in_array($actionKey, $this->usedActionKeys, true)) {
+        if ($playsRemaining <= 0 && in_array($actionKey, $this->usedActionKeys, true)) {
             return false;
         }
 
@@ -54,9 +58,10 @@ final class HNS_FreeActionEngine
         array $triggerEvents,
         int $currentCooldown,
         int $nextCooldown,
-        array $producedEvents
+        array $producedEvents,
+        int $playsRemaining = 0
     ): array {
-        if (!$this->canUseFreeAction($actionKey, $triggerEvents, $currentCooldown)) {
+        if (!$this->canUseFreeAction($actionKey, $triggerEvents, $currentCooldown, $playsRemaining)) {
             throw new InvalidArgumentException('Free action is not available.');
         }
 

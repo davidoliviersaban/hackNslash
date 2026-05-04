@@ -21,7 +21,7 @@ final class RoomSlotPatternTest extends TestCase
     {
         $slots = HNS_RoomSlotPattern::assignLevelMonsterSlots(3, [
             ['monster_id' => 1, 'size' => 'small'],
-            ['monster_id' => 7, 'size' => 'large'],
+            ['monster_id' => 7, 'size' => 'big'],
             ['monster_id' => 2, 'size' => 'small'],
         ]);
 
@@ -62,11 +62,11 @@ final class RoomSlotPatternTest extends TestCase
     {
         $room = [
             1 => ['type' => 'monster', 'size' => 'small'],
-            2 => ['type' => 'monster', 'size' => 'large'],
+            2 => ['type' => 'monster', 'size' => 'big'],
             3 => ['type' => 'enchantment', 'enchantment' => 'shield'],
-            4 => ['type' => 'monster', 'size' => 'large'],
+            4 => ['type' => 'monster', 'size' => 'big'],
             5 => ['type' => 'monster', 'size' => 'small'],
-            6 => ['type' => 'monster', 'size' => 'large'],
+            6 => ['type' => 'monster', 'size' => 'big'],
             7 => ['type' => 'enchantment', 'enchantment' => 'spikes'],
         ];
 
@@ -76,10 +76,10 @@ final class RoomSlotPatternTest extends TestCase
     public function testLargeMonsterOnOddSlotIsRejected(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            1 => ['type' => 'monster', 'size' => 'large'],
+            1 => ['type' => 'monster', 'size' => 'big'],
         ]);
 
-        $this->assertContains('slot 1 cannot contain a large monster', $errors);
+        $this->assertContains('slot 1 cannot contain a big monster', $errors);
     }
 
     public function testSmallMonsterOnEvenSlotIsRejected(): void

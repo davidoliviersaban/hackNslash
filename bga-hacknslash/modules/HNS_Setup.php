@@ -39,7 +39,7 @@ trait HNS_Setup
     protected function setupInitialBoard(int $level): void
     {
         $seed = random_int(1, PHP_INT_MAX);
-        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments($level));
+        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments($level), $this->bosses ?? []);
 
         $abilities = $this->hns_sql_escape((string) json_encode($levelState['level_monster_abilities']));
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('level_seed', '$seed')");
@@ -210,9 +210,10 @@ trait HNS_Setup
 
     protected function initializePlayerPowers(int $playerId, ?array $powerKeys = null): void
     {
+        $this->ensurePowerPlaysRemainingColumn();
         foreach (($powerKeys ?? self::HNS_STARTING_POWER_KEYS) as $slot => $powerKey) {
             $powerSlot = $slot + 1;
-            $this->DbQuery("INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown) VALUES ($playerId, $powerSlot, '$powerKey', 0)");
+            $this->DbQuery("INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown, power_plays_remaining) VALUES ($playerId, $powerSlot, '$powerKey', 0, 0)");
         }
     }
 }

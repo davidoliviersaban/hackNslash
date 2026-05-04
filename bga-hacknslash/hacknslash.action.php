@@ -32,14 +32,6 @@ class action_hacknslash extends APP_GameAction
         self::ajaxResponse();
     }
 
-    public function actAttack()
-    {
-        self::setAjaxMode();
-        $targetId = self::getArg('target_id', AT_posint, true);
-        $this->game->actAttack($targetId);
-        self::ajaxResponse();
-    }
-
     public function actEndTurn()
     {
         self::setAjaxMode();

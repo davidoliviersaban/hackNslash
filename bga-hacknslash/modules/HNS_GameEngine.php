@@ -6,9 +6,10 @@ final class HNS_GameEngine
      * @param array<int, array<string, mixed>> $monsterMaterial
      * @param array<int, int> $monsterDeck
      * @param array<int, string> $enchantmentDeck
+     * @param array<string, array<string, mixed>> $bossMaterial
      * @return array<string, mixed>
      */
-    public static function createLevel(int $levelNumber, int $seed, array $monsterMaterial, array $monsterDeck, array $enchantmentDeck = []): array
+    public static function createLevel(int $levelNumber, int $seed, array $monsterMaterial, array $monsterDeck, array $enchantmentDeck = [], array $bossMaterial = []): array
     {
         if ($levelNumber === HNS_BOSS_LEVEL) {
             $layout = HNS_LevelGenerator::generate(7, $seed);
@@ -22,7 +23,7 @@ final class HNS_GameEngine
                 'level_monster_abilities' => [],
                 'layout' => $layout,
                 'tiles' => $tiles,
-                'entities' => [900 => HNS_BossEngine::initialBossEntity('slasher', 900, (int) $bossTileId, ['slasher' => self::slasherBossMaterial()])],
+                'entities' => [900 => HNS_BossEngine::initialBossEntity('slasher', 900, (int) $bossTileId, $bossMaterial)],
                 'monster_slots' => [],
                 'reward_offer' => [],
                 'reward_upgrades' => [],
@@ -33,7 +34,7 @@ final class HNS_GameEngine
         $rng = new HNS_SeededRandom($seed + $levelNumber);
         $levelMonsterIds = self::selectMonstersForRoomSlots($rng->shuffle($monsterDeck), $monsterMaterial, $levelNumber);
         $slotPayloads = array_map(static function (int $monsterId) use ($monsterMaterial): array {
-            return ['monster_id' => $monsterId, 'size' => ($monsterMaterial[$monsterId]['size'] ?? 'small') === 'big' ? 'large' : 'small'];
+            return ['monster_id' => $monsterId, 'size' => ($monsterMaterial[$monsterId]['size'] ?? 'small') === 'big' ? 'big' : 'small'];
         }, $levelMonsterIds);
         $monsterSlots = HNS_RoomSlotPattern::assignLevelMonsterSlots($levelNumber, $slotPayloads);
         $entities = self::spawnMonsters($layout['monster_starts'], $monsterSlots, $monsterMaterial);
@@ -61,16 +62,6 @@ final class HNS_GameEngine
             'level_monster_abilities' => $abilities,
             'reward_offer' => [],
             'reward_upgrades' => [],
-        ];
-    }
-
-    /** @return array<string, mixed> */
-    private static function slasherBossMaterial(): array
-    {
-        return [
-            'phases' => [
-                1 => ['health' => 8],
-            ],
         ];
     }
 
@@ -200,7 +191,7 @@ final class HNS_GameEngine
     private static function addActorEntityIds(array $events, array $stackEntityIds): array
     {
         foreach ($events as &$event) {
-            if (!in_array($event['type'] ?? null, ['monsterAttack', 'monsterStick', 'monsterCharge', 'monsterFrontArcAttack', 'monsterSummon', 'monsterExplode'], true)) {
+            if (!in_array($event['type'] ?? null, ['monsterAttack', 'monsterSlime', 'monsterCharge', 'monsterFrontArc', 'monsterSummon', 'monsterExplode'], true)) {
                 continue;
             }
 
@@ -319,7 +310,7 @@ final class HNS_GameEngine
             $material = $monsterMaterial[$monsterId];
             $spawnCount = (int) ($material['spawn_count'] ?? 1);
             for ($copy = 0; $copy < $spawnCount; $copy++) {
-                $start = $monsterStarts[$slot - 1 + $copy] ?? $monsterStarts[$slot - 1];
+                $start = $monsterStarts[$slot - 1];
                 $entities[$entityId] = [
                     'id' => $entityId,
                     'type' => 'monster',
@@ -366,5 +357,13 @@ final class HNS_GameEngine
         }
 
         return (int) array_key_first($tiles);
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $entities
+     */
+    public static function nextEntityId(array $entities): int
+    {
+        return empty($entities) ? 1 : max(array_map('intval', array_keys($entities))) + 1;
     }
 }

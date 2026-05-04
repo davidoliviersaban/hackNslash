@@ -57,6 +57,7 @@ CREATE TABLE IF NOT EXISTS `player_power` (
     `power_slot` TINYINT UNSIGNED NOT NULL,
     `power_key` VARCHAR(32) NOT NULL,
     `power_cooldown` TINYINT UNSIGNED NOT NULL DEFAULT '0',
+    `power_plays_remaining` TINYINT UNSIGNED NOT NULL DEFAULT '0' COMMENT 'Remaining chained plays for multi-play powers (e.g. dash_attack)',
     PRIMARY KEY (`player_power_id`),
     UNIQUE KEY `player_power_slot_unique` (`player_id`, `power_slot`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

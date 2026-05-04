@@ -2,6 +2,7 @@
 
 use PHPUnit\Framework\TestCase;
 
+require_once dirname(__DIR__) . '/modules/HNS_SeededRandom.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelGenerator.php';
 
 final class LevelGeneratorTest extends TestCase
@@ -84,7 +85,7 @@ final class LevelGeneratorTest extends TestCase
         require_once dirname(__DIR__) . '/modules/HNS_BossEngine.php';
         require_once dirname(__DIR__) . '/modules/HNS_GameEngine.php';
 
-        $state = HNS_GameEngine::createLevel(HNS_BOSS_LEVEL, 1234, [], []);
+        $state = HNS_GameEngine::createLevel(HNS_BOSS_LEVEL, 1234, [], [], [], ['slasher' => ['phases' => [1 => ['health' => 8]]]]);
         $center = (int) floor($state['layout']['grid_size'] / 2);
 
         foreach ($state['tiles'] as $tile) {

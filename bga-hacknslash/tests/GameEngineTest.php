@@ -3,6 +3,7 @@
 use PHPUnit\Framework\TestCase;
 
 require_once dirname(__DIR__) . '/modules/material/constants.inc.php';
+require_once dirname(__DIR__) . '/modules/HNS_SeededRandom.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelGenerator.php';
 require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 require_once dirname(__DIR__) . '/modules/HNS_BoardRules.php';
@@ -15,13 +16,16 @@ final class GameEngineTest extends TestCase
 {
     private array $monsters;
     private array $powers;
+    private array $bosses;
 
     protected function setUp(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
         $this->monsters = $monsters;
         $this->powers = $bonus_cards;
+        $this->bosses = $bosses;
     }
 
     public function testCreateLevelDrawsMonstersForLevelSlotsAndAppliesEnchantment(): void
@@ -42,7 +46,7 @@ final class GameEngineTest extends TestCase
 
     public function testBossLevelGeneratesRoomAndSlasherEntityWithoutMonsterSlots(): void
     {
-        $state = HNS_GameEngine::createLevel(8, 123, $this->monsters, array_keys($this->monsters));
+        $state = HNS_GameEngine::createLevel(8, 123, $this->monsters, array_keys($this->monsters), [], $this->bosses);
 
         $this->assertTrue($state['is_boss_level']);
         $this->assertSame([], $state['monster_slots']);
@@ -202,10 +206,8 @@ final class GameEngineTest extends TestCase
 
     public function testActivateMonstersActivatesBosses(): void
     {
-        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
-
         $state = [
-            'bosses' => $bosses,
+            'bosses' => $this->bosses,
             'tiles' => [
                 1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
                 2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
@@ -231,9 +233,9 @@ final class GameEngineTest extends TestCase
     {
         $state = ['entities' => [20 => ['type' => 'monster', 'state' => 'dead']], 'player_powers' => []];
 
-        $updated = HNS_GameEngine::prepareLevelReward($state, $this->powers, ['attack', 'dash_1', 'vortex']);
+        $updated = HNS_GameEngine::prepareLevelReward($state, $this->powers, ['attack', 'dash_1', 'vortex_1']);
 
-        $this->assertSame(['dash_1', 'vortex'], $updated['reward_offer']);
+        $this->assertSame(['dash_1', 'vortex_1'], $updated['reward_offer']);
         $this->assertSame([], $updated['reward_upgrades']);
     }
 }

@@ -61,7 +61,7 @@ final class HNS_PowerResolver
      */
     private static function resolveAttack(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
-        self::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
         $targetEntityIds = self::attackTargetEntityIds($payload, $state, (int) ($power['targets'] ?? 1));
         if ($targetEntityIds === []) {
             throw new InvalidArgumentException('No attack target selected.');
@@ -71,22 +71,22 @@ final class HNS_PowerResolver
             throw new InvalidArgumentException("Too many targets for $powerKey.");
         }
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $shieldDamageByTargetId = [];
         foreach ($targetEntityIds as $targetEntityId) {
             $shieldDamageByTargetId[$targetEntityId] = ($shieldDamageByTargetId[$targetEntityId] ?? 0) + (int) $power['damage'];
         }
         $shieldAbsorbedTargetIds = [];
         foreach ($targetEntityIds as $targetEntityId) {
-            self::assertEntityExists($state, $targetEntityId);
+            HNS_BoardRules::assertEntityExists($state, $targetEntityId);
             $sourceType = (string) ($state['entities'][$sourceEntityId]['type'] ?? '');
             $targetType = (string) ($state['entities'][$targetEntityId]['type'] ?? '');
             if ($sourceType === 'hero' && $targetType === 'hero') {
                 throw new InvalidArgumentException("Cannot target an allied hero with $powerKey.");
             }
 
-            $targetTile = self::entityTile($state, $targetEntityId);
-            $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+            $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
+            $isInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
                 ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
                 : HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['range']);
             if (!$isInRange) {
@@ -117,10 +117,7 @@ final class HNS_PowerResolver
                 continue;
             }
 
-            if (in_array('thorns', $state['level_monster_abilities'] ?? [], true) && HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
-                $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
-                $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
-            }
+            $state = self::applyThornsDamageIfMelee($sourceEntityId, $targetEntityId, $sourceTile, $targetTile, $state, $events);
 
             if ((int) ($power['heal_on_damage'] ?? 0) > 0) {
                 $state = self::healEntity($sourceEntityId, (int) $power['heal_on_damage'], $sourceEntityId, $state, $events);
@@ -149,14 +146,15 @@ final class HNS_PowerResolver
     {
         self::assertHeroCanMoveWithPower($state, $sourceEntityId, $powerKey);
 
-        $targetEntityIds = self::attackTargetEntityIds($payload, $state, 1);
-        if ($targetEntityIds === []) {
-            throw new InvalidArgumentException('No dash attack target selected.');
-        }
+        $targetEntityIds = self::dashAttackTargetEntityIds($payload);
 
-        self::assertEntityExists($state, $sourceEntityId);
-        $sourceTile = self::entityTile($state, $sourceEntityId);
-        $destinationTile = self::dashAttackDestinationTile($sourceTile, $targetEntityIds, $state, $power, $sourceEntityId, $powerKey);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
+        $selectedTileId = (int) ($payload['selected_tile_id'] ?? $payload['target_tile_id'] ?? 0);
+        if ($selectedTileId <= 0) {
+            throw new InvalidArgumentException("No dash destination for $powerKey.");
+        }
+        $destinationTile = self::dashAttackDestinationTile($sourceTile, $targetEntityIds, $state, $power, $sourceEntityId, $powerKey, $selectedTileId);
         $state['entities'][$sourceEntityId]['tile_id'] = (int) $destinationTile['id'];
         $events[] = [
             'type' => HNS_FreeActionEngine::EVENT_AFTER_DASH,
@@ -165,8 +163,8 @@ final class HNS_PowerResolver
         ];
 
         foreach ($targetEntityIds as $targetEntityId) {
-            self::assertEntityExists($state, $targetEntityId);
-            $targetTile = self::entityTile($state, $targetEntityId);
+            HNS_BoardRules::assertEntityExists($state, $targetEntityId);
+            $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
             if (!HNS_BoardRules::isInOrthogonalRange($destinationTile, $targetTile, [1, 1])) {
                 throw new InvalidArgumentException("Target is out of range for $powerKey after dash.");
             }
@@ -174,6 +172,7 @@ final class HNS_PowerResolver
                 throw new InvalidArgumentException("Target is not in line of sight for $powerKey after dash.");
             }
             $state = self::damageEntity($targetEntityId, (int) $power['damage'], $sourceEntityId, $state, $events);
+            $state = self::applyThornsDamageIfMelee($sourceEntityId, $targetEntityId, $destinationTile, $targetTile, $state, $events);
         }
 
         if ((int) ($power['plays'] ?? 1) > 1) {
@@ -183,6 +182,23 @@ final class HNS_PowerResolver
         return ['state' => $state, 'events' => $events];
     }
 
+    /** @return array<int, int> */
+    private static function dashAttackTargetEntityIds(array $payload): array
+    {
+        if (!empty($payload['target_entity_id'])) {
+            return [(int) $payload['target_entity_id']];
+        }
+
+        if (empty($payload['target_entity_ids'])) {
+            return [];
+        }
+
+        $rawIds = is_array($payload['target_entity_ids']) ? $payload['target_entity_ids'] : preg_split('/\s+/', (string) $payload['target_entity_ids']);
+        $ids = array_values(array_filter(array_map('intval', $rawIds ?: []), static fn (int $id): bool => $id > 0));
+
+        return array_slice($ids, 0, 1);
+    }
+
     /**
      * @param array<string, mixed> $sourceTile
      * @param array<int, int> $targetEntityIds
@@ -190,42 +206,44 @@ final class HNS_PowerResolver
      * @param array<string, mixed> $power
      * @return array<string, mixed>
      */
-    private static function dashAttackDestinationTile(array $sourceTile, array $targetEntityIds, array $state, array $power, int $sourceEntityId, string $powerKey): array
+    private static function dashAttackDestinationTile(array $sourceTile, array $targetEntityIds, array $state, array $power, int $sourceEntityId, string $powerKey, int $selectedTileId): array
     {
         $targetTiles = [];
         foreach ($targetEntityIds as $targetEntityId) {
-            self::assertEntityExists($state, $targetEntityId);
-            $targetTiles[] = self::entityTile($state, $targetEntityId);
+            HNS_BoardRules::assertEntityExists($state, $targetEntityId);
+            $targetTiles[] = HNS_BoardRules::entityTile($state, $targetEntityId);
         }
 
-        $candidates = [];
-        foreach ($state['tiles'] as $tile) {
-            $isDashInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
-                ? HNS_BoardRules::isInDiagonalRange($sourceTile, $tile, $power['range'])
-                : HNS_BoardRules::isInOrthogonalRange($sourceTile, $tile, $power['range']);
-            if (!$isDashInRange || !HNS_BoardRules::isTileWalkable($tile) || !HNS_BoardRules::canEnterTile((int) $tile['id'], $state['entities'], $state['entities'][$sourceEntityId], $sourceEntityId)) {
-                continue;
+        HNS_BoardRules::assertTileExists($state, $selectedTileId);
+        $selectedTile = $state['tiles'][$selectedTileId];
+        if (!self::isValidDashAttackDestination($sourceTile, $selectedTile, $targetTiles, $state, $power, $sourceEntityId)) {
+            throw new InvalidArgumentException("Invalid dash destination for $powerKey.");
+        }
+
+        return $selectedTile;
+    }
+
+    /**
+     * @param array<string, mixed> $sourceTile
+     * @param array<string, mixed> $tile
+     * @param array<int, array<string, mixed>> $targetTiles
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $power
+     */
+    private static function isValidDashAttackDestination(array $sourceTile, array $tile, array $targetTiles, array $state, array $power, int $sourceEntityId): bool
+    {
+        $isDashInRange = HNS_BoardRules::isInRange($sourceTile, $tile, $power['range']);
+        if (!$isDashInRange || !HNS_BoardRules::isTileWalkable($tile) || !HNS_BoardRules::canEnterTile((int) $tile['id'], $state['entities'], $state['entities'][$sourceEntityId], $sourceEntityId)) {
+            return false;
+        }
+
+        foreach ($targetTiles as $targetTile) {
+            if (!HNS_BoardRules::isInOrthogonalRange($tile, $targetTile, [1, 1]) || !HNS_BoardRules::hasLineOfSight($tile, $targetTile, $state['tiles'])) {
+                return false;
             }
-
-            foreach ($targetTiles as $targetTile) {
-                if (!HNS_BoardRules::isInOrthogonalRange($tile, $targetTile, [1, 1])) {
-                    continue 2;
-                }
-            }
-
-            $candidates[] = $tile;
         }
 
-        usort($candidates, static function (array $left, array $right) use ($sourceTile): int {
-            return HNS_BoardRules::distance($sourceTile, $right) <=> HNS_BoardRules::distance($sourceTile, $left)
-                ?: (int) $left['id'] <=> (int) $right['id'];
-        });
-
-        if ($candidates === []) {
-            throw new InvalidArgumentException("No valid dash destination for $powerKey.");
-        }
-
-        return $candidates[0];
+        return true;
     }
 
     /**
@@ -240,15 +258,15 @@ final class HNS_PowerResolver
         $targetTileId = (int) ($payload['target_tile_id'] ?? $payload['selected_tile_id'] ?? 0);
         if ($targetTileId === 0 && (int) ($payload['target_entity_id'] ?? 0) > 0) {
             $targetEntityId = (int) $payload['target_entity_id'];
-            self::assertEntityExists($state, $targetEntityId);
+            HNS_BoardRules::assertEntityExists($state, $targetEntityId);
             $targetTileId = (int) ($state['entities'][$targetEntityId]['tile_id'] ?? 0);
         }
-        self::assertEntityExists($state, $sourceEntityId);
-        self::assertTileExists($state, $targetTileId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertTileExists($state, $targetTileId);
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $targetTile = $state['tiles'][$targetTileId];
-        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+        $isInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
             ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
             : HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['range']);
         if (!$isInRange) {
@@ -279,13 +297,13 @@ final class HNS_PowerResolver
      */
     private static function resolveMoveAreaAttack(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
-        self::assertEntityExists($state, $sourceEntityId);
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $targetTileId = (int) ($payload['target_tile_id'] ?? $payload['selected_tile_id'] ?? $sourceTile['id']);
         if ($targetTileId === 0) {
             $targetTileId = (int) $sourceTile['id'];
         }
-        self::assertTileExists($state, $targetTileId);
+        HNS_BoardRules::assertTileExists($state, $targetTileId);
         $targetTile = $state['tiles'][$targetTileId];
 
         $isInRange = ($power['range_metric'] ?? 'chebyshev') === 'orthogonal'
@@ -358,17 +376,17 @@ final class HNS_PowerResolver
      */
     private static function resolveHeal(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
-        self::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
         $targetEntityId = (int) ($payload['target_entity_id'] ?? $sourceEntityId);
-        self::assertEntityExists($state, $targetEntityId);
+        HNS_BoardRules::assertEntityExists($state, $targetEntityId);
 
         if (($state['entities'][$targetEntityId]['type'] ?? null) !== 'hero') {
             throw new InvalidArgumentException("Heal target must be a hero for $powerKey.");
         }
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
-        $targetTile = self::entityTile($state, $targetEntityId);
-        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
+        $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
+        $isInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
             ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
             : HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['range']);
         if (!$isInRange) {
@@ -390,18 +408,17 @@ final class HNS_PowerResolver
     private static function resolveDash(int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
         $targetTileId = (int) ($payload['target_tile_id'] ?? 0);
-        self::assertEntityExists($state, $sourceEntityId);
-        self::assertTileExists($state, $targetTileId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertTileExists($state, $targetTileId);
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $targetTile = $state['tiles'][$targetTileId];
-        $rangeMetric = $power['range_metric'] ?? 'manhattan';
-        $isInRange = $rangeMetric === 'orthogonal'
-            ? HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['distance'])
-            : HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['distance']);
-        if ($rangeMetric === 'chebyshev') {
-            $isInRange = HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['distance']);
-        }
+        $rangeMetric = $power['range_metric'] ?? 'orthogonal';
+        $isInRange = match ($rangeMetric) {
+            'chebyshev' => HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['distance']),
+            'orthogonal' => HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['distance']),
+            default => HNS_BoardRules::isInRange($sourceTile, $targetTile, $power['distance']),
+        };
         if (!$isInRange) {
             throw new InvalidArgumentException('Dash target is out of range.');
         }
@@ -436,12 +453,12 @@ final class HNS_PowerResolver
      */
     private static function resolveJump(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
-        self::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
         self::assertHeroCanMoveWithPower($state, $sourceEntityId, $powerKey);
         $targetTileId = (int) ($payload['target_tile_id'] ?? $payload['selected_tile_id'] ?? 0);
-        self::assertTileExists($state, $targetTileId);
+        HNS_BoardRules::assertTileExists($state, $targetTileId);
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $targetTile = $state['tiles'][$targetTileId];
         if (!HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['distance'])) {
             throw new InvalidArgumentException("Jump target is out of range for $powerKey.");
@@ -497,6 +514,25 @@ final class HNS_PowerResolver
         return $tokens === [] ? null : implode(' ', $tokens);
     }
 
+    /**
+     * @param array<string, mixed> $sourceTile
+     * @param array<string, mixed> $targetTile
+     * @param array<string, mixed> $state
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function applyThornsDamageIfMelee(int $sourceEntityId, int $targetEntityId, array $sourceTile, array $targetTile, array $state, array &$events): array
+    {
+        if (!in_array('thorns', $state['level_monster_abilities'] ?? [], true) || !HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
+            return $state;
+        }
+
+        $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
+        $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
+
+        return $state;
+    }
+
     /** @param array<string, mixed> $state */
     private static function assertHeroCanMoveWithPower(array $state, int $sourceEntityId, string $powerKey): void
     {
@@ -504,14 +540,27 @@ final class HNS_PowerResolver
             return;
         }
 
-        if (self::hasSlimeStatus((string) ($state['entities'][$sourceEntityId]['status'] ?? ''))) {
+        if (self::isHeroHeldByAdjacentSlime($state, $sourceEntityId)) {
             throw new InvalidArgumentException("Slimed heroes cannot move with $powerKey.");
         }
     }
 
-    private static function hasSlimeStatus(string $status): bool
+    /** @param array<string, mixed> $state */
+    private static function isHeroHeldByAdjacentSlime(array $state, int $sourceEntityId): bool
     {
-        return preg_match('/(^|\s)(slimed|stuck|stick)(\s|$)/', $status) === 1;
+        $heroTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
+        foreach ($state['entities'] ?? [] as $entity) {
+            if (($entity['type'] ?? null) !== 'monster' || (int) ($entity['type_arg'] ?? 0) !== 2 || ($entity['state'] ?? 'active') !== 'active' || (int) ($entity['health'] ?? 1) <= 0) {
+                continue;
+            }
+
+            $slimeTile = $state['tiles'][(int) ($entity['tile_id'] ?? 0)] ?? null;
+            if ($slimeTile !== null && HNS_BoardRules::isExactStep($heroTile, $slimeTile, 1)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -613,8 +662,8 @@ final class HNS_PowerResolver
     {
         $selectedTileId = (int) ($payload['selected_tile_id'] ?? 0);
         $targetEntityIds = array_map('intval', $payload['target_entity_ids'] ?? []);
-        self::assertEntityExists($state, $sourceEntityId);
-        self::assertTileExists($state, $selectedTileId);
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        HNS_BoardRules::assertTileExists($state, $selectedTileId);
 
         if (count($targetEntityIds) > (int) $power['targets']) {
             throw new InvalidArgumentException('Too many targets for pull power.');
@@ -624,9 +673,9 @@ final class HNS_PowerResolver
             throw new InvalidArgumentException('Pull power cannot target the same entity more than once.');
         }
 
-        $sourceTile = self::entityTile($state, $sourceEntityId);
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $selectedTile = $state['tiles'][$selectedTileId];
-        $isInRange = ($power['range_metric'] ?? 'manhattan') === 'chebyshev'
+        $isInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
             ? HNS_BoardRules::isInDiagonalRange($sourceTile, $selectedTile, $power['range'])
             : HNS_BoardRules::isInRange($sourceTile, $selectedTile, $power['range']);
         if (!$isInRange) {
@@ -639,8 +688,8 @@ final class HNS_PowerResolver
         $targetEntityIds = self::sortMonstersByMovementOrder($targetEntityIds, $state['entities']);
 
         foreach ($targetEntityIds as $targetEntityId) {
-            self::assertEntityExists($state, $targetEntityId);
-            $targetTile = self::entityTile($state, $targetEntityId);
+            HNS_BoardRules::assertEntityExists($state, $targetEntityId);
+            $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
             if (!HNS_BoardRules::isInDiagonalRange($selectedTile, $targetTile, $power['target_range_from_selected_tile'])) {
                 throw new InvalidArgumentException('Pull target is out of range from selected tile.');
             }
@@ -664,7 +713,7 @@ final class HNS_PowerResolver
     private static function pullEntityTowardTile(int $entityId, int $destinationTileId, int $distance, array $state, array &$events, int $sourceEntityId): array
     {
         for ($step = 0; $step < $distance; $step++) {
-            $currentTile = self::entityTile($state, $entityId);
+            $currentTile = HNS_BoardRules::entityTile($state, $entityId);
             $destinationTile = $state['tiles'][$destinationTileId];
             if ((int) $currentTile['id'] === $destinationTileId) {
                 return $state;
@@ -698,7 +747,7 @@ final class HNS_PowerResolver
     private static function pushEntityAwayFromTile(int $entityId, array $sourceTile, int $distance, array $state, array &$events, int $sourceEntityId): array
     {
         for ($step = 0; $step < $distance; $step++) {
-            $currentTile = self::entityTile($state, $entityId);
+            $currentTile = HNS_BoardRules::entityTile($state, $entityId);
             $dx = (int) $currentTile['x'] <=> (int) $sourceTile['x'];
             $dy = (int) $currentTile['y'] <=> (int) $sourceTile['y'];
             if ($dx === 0 && $dy === 0) {
@@ -1021,27 +1070,6 @@ final class HNS_PowerResolver
         return array_merge($monsters[$monsterId] ?? [], $entity);
     }
 
-    /**
-     * @param array<string, mixed> $state
-     * @return array<string, mixed>
-     */
-    private static function entityTile(array $state, int $entityId): array
-    {
-        self::assertEntityExists($state, $entityId);
-        $tileId = (int) $state['entities'][$entityId]['tile_id'];
-        self::assertTileExists($state, $tileId);
-
-        return $state['tiles'][$tileId];
-    }
-
-    /** @param array<string, mixed> $state */
-    private static function assertEntityExists(array $state, int $entityId): void
-    {
-        if (!isset($state['entities'][$entityId])) {
-            throw new InvalidArgumentException("Unknown entity $entityId.");
-        }
-    }
-
     /** @param array<string, mixed> $state */
     private static function attackTargetEntityIds(array $payload, array $state, int $maxTargets): array
     {
@@ -1059,7 +1087,7 @@ final class HNS_PowerResolver
     /** @param array<string, mixed> $state */
     private static function attackTargetEntityIdForTile(int $tileId, array $state): int
     {
-        self::assertTileExists($state, $tileId);
+        HNS_BoardRules::assertTileExists($state, $tileId);
         foreach ($state['entities'] as $entityId => $entity) {
             if (($entity['state'] ?? 'active') === 'dead') {
                 continue;
@@ -1073,14 +1101,6 @@ final class HNS_PowerResolver
         }
 
         throw new InvalidArgumentException('No attack target on selected tile.');
-    }
-
-    /** @param array<string, mixed> $state */
-    private static function assertTileExists(array $state, int $tileId): void
-    {
-        if (!isset($state['tiles'][$tileId])) {
-            throw new InvalidArgumentException("Unknown tile $tileId.");
-        }
     }
 
     /** @return array<string, mixed> */

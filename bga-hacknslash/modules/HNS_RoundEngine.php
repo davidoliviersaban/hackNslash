@@ -36,17 +36,30 @@ final class HNS_RoundEngine
     /** @param array<string, mixed> $state */
     public static function clearExpiredSlimedStatuses(array $state): array
     {
+        $result = self::clearExpiredSlimedStatusesWithEvents($state);
+
+        return $result['state'];
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @return array{state: array<string, mixed>, events: array<int, array<string, mixed>>}
+     */
+    public static function clearExpiredSlimedStatusesWithEvents(array $state): array
+    {
+        $events = [];
         foreach ($state['entities'] ?? [] as $entityId => $entity) {
-            if (($entity['type'] ?? null) !== 'hero' || !self::hasSlimeStatus((string) ($entity['status'] ?? ''))) {
+            if (($entity['type'] ?? null) !== 'hero' || !HNS_BoardRules::hasSlimeStatus((string) ($entity['status'] ?? ''))) {
                 continue;
             }
 
             if (!self::isHeroHeldByAdjacentSlimeEntity($state, $entity)) {
                 $state['entities'][$entityId]['status'] = null;
+                $events[] = ['type' => 'entityStatusChanged', 'entity_id' => (int) $entityId, 'status' => null];
             }
         }
 
-        return $state;
+        return ['state' => $state, 'events' => $events];
     }
 
     /** @param array<string, mixed> $state */
@@ -65,11 +78,11 @@ final class HNS_RoundEngine
     /** @param array<string, mixed> $state */
     public static function consumeMove(array $state, int $playerId): array
     {
+        $state = self::clearExpiredSlimedStatuses($state);
         $playerKey = self::playerKey($state, $playerId);
         if (self::isPlayerHeldByAdjacentSlime($state, $playerId)) {
             throw new InvalidArgumentException('Slimed heroes cannot move except with Dash.');
         }
-        $state = self::clearExpiredSlimedStatus($state, $playerId);
         if (self::flag($state['players'][$playerKey]['free_move_available'] ?? false)) {
             return self::consumeFreeMove($state, $playerId);
         }
@@ -231,7 +244,7 @@ final class HNS_RoundEngine
      * @param array<int, string> $powerDeck
      * @return array{state: array<string, mixed>, events: array<int, array<string, mixed>>}
      */
-    public static function resolveLevelEnd(array $state, array $monsterMaterial, array $monsterDeck, array $powers, array $powerDeck, int $seed): array
+    public static function resolveLevelEnd(array $state, array $monsterMaterial, array $monsterDeck, array $powers, array $powerDeck, int $seed, array $bossMaterial = []): array
     {
         if (!HNS_GameEngine::isLevelCleared($state)) {
             return ['state' => $state, 'events' => []];
@@ -248,7 +261,7 @@ final class HNS_RoundEngine
             return ['state' => $state, 'events' => $events];
         }
 
-        $nextState = HNS_GameEngine::createLevel($nextLevel, $seed, $monsterMaterial, $monsterDeck);
+        $nextState = HNS_GameEngine::createLevel($nextLevel, $seed, $monsterMaterial, $monsterDeck, [], $bossMaterial);
         $nextState['players'] = $state['players'] ?? [];
         $nextState['player_powers'] = $state['player_powers'] ?? [];
         $events[] = ['type' => 'levelStarted', 'level' => $nextLevel, 'is_boss_level' => $nextState['is_boss_level'] ?? false];
@@ -299,7 +312,7 @@ final class HNS_RoundEngine
             break;
         }
 
-        if ($hero === null || !self::hasSlimeStatus((string) ($hero['status'] ?? ''))) {
+        if ($hero === null) {
             return false;
         }
 
@@ -318,7 +331,7 @@ final class HNS_RoundEngine
         }
 
         foreach ($state['entities'] ?? [] as $entity) {
-            if (($entity['type'] ?? null) !== 'monster' || (int) ($entity['type_arg'] ?? 0) !== 2 || ($entity['state'] ?? 'active') !== 'active') {
+            if (($entity['type'] ?? null) !== 'monster' || (int) ($entity['type_arg'] ?? 0) !== 2 || ($entity['state'] ?? 'active') !== 'active' || (int) ($entity['health'] ?? 1) <= 0) {
                 continue;
             }
 
@@ -331,20 +344,4 @@ final class HNS_RoundEngine
         return false;
     }
 
-    /** @param array<string, mixed> $state */
-    private static function clearExpiredSlimedStatus(array $state, int $playerId): array
-    {
-        foreach ($state['entities'] ?? [] as $entityId => $entity) {
-            if (($entity['type'] ?? null) === 'hero' && (int) ($entity['owner'] ?? 0) === $playerId && self::hasSlimeStatus((string) ($entity['status'] ?? ''))) {
-                $state['entities'][$entityId]['status'] = null;
-            }
-        }
-
-        return $state;
-    }
-
-    private static function hasSlimeStatus(string $status): bool
-    {
-        return preg_match('/(^|\s)(slimed|stuck|stick)(\s|$)/', $status) === 1;
-    }
 }

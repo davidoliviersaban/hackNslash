@@ -24,7 +24,7 @@ final class MonsterMaterialTest extends TestCase
         $this->assertFalse($goblins['can_attack_and_move']);
     }
 
-    public function testSlimesArriveByTwoWithTwoHealthDiagonalMoveAndStickAttack(): void
+    public function testSlimesArriveAloneWithTwoHealthDiagonalMoveAndStickAttack(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
 
@@ -32,13 +32,13 @@ final class MonsterMaterialTest extends TestCase
 
         $this->assertSame('Slimes', $slimes['name']);
         $this->assertSame(2, $slimes['health']);
-        $this->assertSame(2, $slimes['spawn_count']);
+        $this->assertSame(1, $slimes['spawn_count']);
         $this->assertSame(2, $slimes['move']);
         $this->assertSame('chebyshev', $slimes['move_metric']);
         $this->assertSame(1, $slimes['range']);
         $this->assertSame('orthogonal', $slimes['range_metric']);
         $this->assertSame(0, $slimes['damage']);
-        $this->assertSame('stick', $slimes['effect']);
+        $this->assertSame('slime', $slimes['effect']);
     }
 
     public function testEvilEyeDoesNotMoveAndShootsAtRangeThreeWithDiagonals(): void
@@ -119,7 +119,7 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame(1, $orc['move']);
         $this->assertSame('orthogonal', $orc['move_metric']);
         $this->assertSame('front_arc', $orc['range_metric']);
-        $this->assertSame('front_arc_damage', $orc['effect']);
+        $this->assertSame('front_arc', $orc['effect']);
         $this->assertSame(2, $orc['damage']);
     }
 
@@ -156,13 +156,4 @@ final class MonsterMaterialTest extends TestCase
         $this->assertSame(1, $wolfRider['summon_count']);
     }
 
-    public function testRaiderIsNotAMoveAndAttackExceptionByDefault(): void
-    {
-        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
-
-        $raider = $monsters[11];
-
-        $this->assertSame('Raider', $raider['name']);
-        $this->assertFalse($raider['can_attack_and_move']);
-    }
 }

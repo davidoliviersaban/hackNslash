@@ -72,12 +72,8 @@ final class AssetExistenceTest extends TestCase
         // The level renderer must reference the entrance/exit/pillar/hole/spikes
         // icons plus at least the four floor variants and the wall directional
         // variants.
-        $required = [
-            'tiles/levels/entrance.webp',
-            'tiles/levels/exit.webp',
-            'tiles/levels/pillar.webp',
-            'tiles/levels/hole.webp',
-            'tiles/levels/spikes.webp',
+        // Assets that are string literals in the JS.
+        $literalAssets = [
             'tiles/levels/floor.webp',
             'tiles/levels/floor-1.webp',
             'tiles/levels/floor-2.webp',
@@ -93,7 +89,11 @@ final class AssetExistenceTest extends TestCase
             'tiles/levels/wall--left-right.webp',
         ];
 
-        foreach ($required as $relative) {
+        // Assets constructed dynamically via simpleTypes mapping — verify the
+        // type name appears in the mapping and the file exists on disk.
+        $dynamicTypes = ['entrance', 'exit', 'pillar', 'hole', 'spikes'];
+
+        foreach ($literalAssets as $relative) {
             $this->assertStringContainsString(
                 $relative,
                 $js,
@@ -102,6 +102,18 @@ final class AssetExistenceTest extends TestCase
             $this->assertFileExists(
                 $root . '/img/' . $relative,
                 "Level asset $relative is missing on disk"
+            );
+        }
+
+        foreach ($dynamicTypes as $type) {
+            $this->assertStringContainsString(
+                "'" . $type . "'",
+                $js,
+                "hacknslash.js does not reference tile type $type in simpleTypes mapping"
+            );
+            $this->assertFileExists(
+                $root . '/img/tiles/levels/' . $type . '.webp',
+                "Level asset tiles/levels/$type.webp is missing on disk"
             );
         }
 

@@ -18,7 +18,7 @@ final class DbHelpersTest extends TestCase
         };
     }
 
-    public function testEscapeFallsBackToAddslashesWhenHostHasNoBgaHelper(): void
+    public function testEscapeFallsBackToStrReplaceWhenHostHasNoBgaHelper(): void
     {
         $this->assertSame("O\\'Brien", $this->host->hns_sql_escape("O'Brien"));
     }

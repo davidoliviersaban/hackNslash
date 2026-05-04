@@ -35,7 +35,7 @@ final class EventDispatcherTest extends TestCase
     {
         $dispatcher = self::readFile(dirname(__DIR__) . '/modules/HNS_EventDispatcher.php');
 
-        $this->assertStringContainsString("in_array(\$event['type'] ?? '', ['cardPlayed', 'afterCardPlayed'], true)", $dispatcher);
+        $this->assertStringContainsString("(\$event['type'] ?? '') === 'afterCardPlayed'", $dispatcher);
         $this->assertStringContainsString("(int) (\$event['source_entity_id'] ?? 0)", $dispatcher);
     }
 

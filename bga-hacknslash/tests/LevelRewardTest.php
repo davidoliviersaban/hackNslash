@@ -16,19 +16,19 @@ final class LevelRewardTest extends TestCase
 
     public function testLevelRewardOfferDrawsThreeRankOnePowers(): void
     {
-        $offer = HNS_LevelReward::drawOffer($this->powers, ['attack', 'dash_1', 'dash_2', 'vortex', 'strike', 'missing']);
+        $offer = HNS_LevelReward::drawOffer($this->powers, ['attack', 'dash_1', 'dash_2', 'vortex_1', 'strike', 'missing']);
 
-        $this->assertSame(['dash_1', 'vortex'], $offer);
+        $this->assertSame(['dash_1', 'vortex_1'], $offer);
     }
 
     public function testLevelRewardOfferStartsMissingFamilyAtRankOneOnly(): void
     {
         $playerPowers = [
-            ['slot' => 1, 'power_key' => 'vortex'],
+            ['slot' => 1, 'power_key' => 'vortex_1'],
             ['slot' => 2, 'power_key' => 'attack'],
             ['slot' => 3, 'power_key' => 'attack'],
         ];
-        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex', 'vortex_2'], $playerPowers);
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex_1', 'vortex_2'], $playerPowers);
 
         $this->assertSame(['dash_1'], $offer);
     }
@@ -36,12 +36,12 @@ final class LevelRewardTest extends TestCase
     public function testLevelRewardOfferKeepsStandardNewCardsAndAddsAvailableUpgrades(): void
     {
         $playerPowers = [
-            ['slot' => 1, 'power_key' => 'vortex'],
+            ['slot' => 1, 'power_key' => 'vortex_1'],
             ['slot' => 2, 'power_key' => 'attack'],
             ['slot' => 3, 'power_key' => 'strike'],
         ];
 
-        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex', 'vortex_2'], $playerPowers, 3);
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex_1', 'vortex_2'], $playerPowers, 3);
 
         $this->assertSame(['dash_1'], $offer);
     }
@@ -50,11 +50,11 @@ final class LevelRewardTest extends TestCase
     {
         $playerPowers = [
             ['slot' => 1, 'power_key' => 'dash_1'],
-            ['slot' => 2, 'power_key' => 'vortex'],
+            ['slot' => 2, 'power_key' => 'vortex_1'],
             ['slot' => 3, 'power_key' => 'attack'],
         ];
 
-        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex', 'vortex_2'], $playerPowers);
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'dash_2', 'vortex_1', 'vortex_2'], $playerPowers);
 
         $this->assertSame([], $offer);
     }
@@ -67,9 +67,9 @@ final class LevelRewardTest extends TestCase
             ['slot' => 3, 'power_key' => 'strike'],
         ];
 
-        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex'], $playerPowers);
+        $offer = HNS_LevelReward::drawOfferForPlayer($this->powers, ['dash_1', 'vortex_1'], $playerPowers);
 
-        $this->assertSame(['vortex'], $offer);
+        $this->assertSame(['vortex_1'], $offer);
     }
 
     public function testLevelRewardUpgradeOfferSkipsRankMaxAndOffersVortexRankThree(): void
@@ -91,14 +91,14 @@ final class LevelRewardTest extends TestCase
     {
         $playerPowers = [
             ['slot' => 1, 'power_key' => 'dash_1'],
-            ['slot' => 2, 'power_key' => 'vortex'],
+            ['slot' => 2, 'power_key' => 'vortex_1'],
             ['slot' => 3, 'power_key' => 'attack'],
         ];
 
         $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, ['vortex_2', 'dash_2'], $playerPowers);
 
         $this->assertSame([
-            ['slot' => 2, 'from' => 'vortex', 'to' => 'vortex_2'],
+            ['slot' => 2, 'from' => 'vortex_1', 'to' => 'vortex_2'],
             ['slot' => 1, 'from' => 'dash_1', 'to' => 'dash_2'],
         ], $upgrades);
     }
@@ -107,14 +107,14 @@ final class LevelRewardTest extends TestCase
     {
         $playerPowers = [
             ['slot' => 1, 'power_key' => 'dash_1'],
-            ['slot' => 2, 'power_key' => 'vortex'],
-            ['slot' => 3, 'power_key' => 'quick-strike_1'],
+            ['slot' => 2, 'power_key' => 'vortex_1'],
+            ['slot' => 3, 'power_key' => 'quick_strike_1'],
         ];
 
-        $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, ['quick-strike_2', 'missing', 'dash_3'], $playerPowers);
+        $upgrades = HNS_LevelReward::drawUpgradeOfferForPlayer($this->powers, ['quick_strike_2', 'missing', 'dash_3'], $playerPowers);
 
         $this->assertSame([
-            ['slot' => 3, 'from' => 'quick-strike_1', 'to' => 'quick-strike_2'],
+            ['slot' => 3, 'from' => 'quick_strike_1', 'to' => 'quick_strike_2'],
         ], $upgrades);
     }
 
@@ -126,9 +126,9 @@ final class LevelRewardTest extends TestCase
             ['slot' => 3, 'power_key' => 'attack'],
         ];
 
-        $updatedPowers = HNS_LevelReward::takeOfferedPower($playerPowers, 2, 'vortex', ['dash_1', 'vortex']);
+        $updatedPowers = HNS_LevelReward::takeOfferedPower($playerPowers, 2, 'vortex_1', ['dash_1', 'vortex_1']);
 
-        $this->assertSame('vortex', $updatedPowers[1]['power_key']);
+        $this->assertSame('vortex_1', $updatedPowers[1]['power_key']);
     }
 
     public function testPlayerCanUpgradeExistingLevelOnePower(): void

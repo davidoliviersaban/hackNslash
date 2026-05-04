@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>GameRules Unit Tests — Hack N Slash</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; }
+    body { font-family: monospace; background: #1a1a1a; color: #e0e0e0; padding: 20px; }
+    h1 { margin-bottom: 12px; font-size: 18px; }
+    #summary { padding: 10px 14px; border-radius: 6px; margin-bottom: 16px; font-weight: bold; }
+    #summary.pass { background: #1b3a1b; color: #6fd66f; }
+    #summary.fail { background: #3a1b1b; color: #d66f6f; }
+    .suite { margin-bottom: 12px; }
+    .suite-name { color: #f6c85f; font-size: 14px; margin-bottom: 4px; }
+    .case { padding: 2px 0 2px 16px; font-size: 13px; }
+    .case.pass { color: #6fd66f; }
+    .case.fail { color: #ff6f5f; font-weight: bold; }
+  </style>
+</head>
+<body>
+<h1>GameRules Unit Tests</h1>
+<div id="summary"></div>
+<div id="results"></div>
+
+<!-- 1. Mock AMD loader + BGA globals -->
+<script>
+(function () {
+  'use strict';
+
+  window.__HNS_TEST__ = true;
+
+  // Mock BGA globals
+  window.ebg = { core: { gamegui: function () {} } };
+  window._ = function (s) { return s; };
+  window.$ = function () { return null; };
+  window.g_gamethemeurl = '';
+
+  // Mock AMD define — executes factory with stubs so GameRules is created
+  window.define = function (deps, factory) {
+    var noop = function () {};
+    var mockDojo = {
+      style: noop, addClass: noop, removeClass: noop, toggleClass: noop,
+      place: noop, empty: noop, destroy: noop, attr: noop, stopEvent: noop,
+      animateProperty: function () { return { play: noop }; },
+      subscribe: noop,
+      query: function () {
+        var list = { forEach: noop, removeClass: noop, attr: noop };
+        return list;
+      }
+    };
+    var mockDeclare = function (name, parent, proto) { return proto; };
+    factory(mockDojo, mockDeclare);
+  };
+})();
+</script>
+
+<!-- 2. Load production code — mock define() captures factory, test hook exposes _HNS -->
+<script src="../bga-hacknslash/hacknslash.js"></script>
+
+<!-- 3. Test suite -->
+<script>
+(function () {
+  'use strict';
+
+  var GR = window._HNS && window._HNS.GameRules;
+  var MONSTER_TYPES = window._HNS && window._HNS.MONSTER_TYPES;
+  var SLIME_TYPE_ARG = window._HNS && window._HNS.SLIME_TYPE_ARG;
+
+  if (!GR) {
+    document.getElementById('summary').textContent = 'FATAL: GameRules not exposed. Check test hook in hacknslash.js.';
+    document.getElementById('summary').className = 'fail';
+    return;
+  }
+
+  // ---- Mini test runner ----
+
+  var passed = 0, failed = 0;
+  var currentSuite = '';
+  var resultsEl = document.getElementById('results');
+  var suiteEl = null;
+
+  function suite(name) {
+    currentSuite = name;
+    suiteEl = document.createElement('div');
+    suiteEl.className = 'suite';
+    suiteEl.innerHTML = '<div class="suite-name">' + name + '</div>';
+    resultsEl.appendChild(suiteEl);
+  }
+
+  function assert(ok, label) {
+    var div = document.createElement('div');
+    div.className = 'case ' + (ok ? 'pass' : 'fail');
+    div.textContent = (ok ? '\u2713 ' : '\u2717 ') + label;
+    suiteEl.appendChild(div);
+    if (ok) { passed++; } else { failed++; console.error('FAIL: ' + currentSuite + ' > ' + label); }
+  }
+
+  function eq(actual, expected, label) {
+    assert(actual === expected, label + '  (got ' + actual + ', expected ' + expected + ')');
+  }
+
+  function deepEq(actual, expected, label) {
+    var a = JSON.stringify(actual), b = JSON.stringify(expected);
+    assert(a === b, label + '  (got ' + a + ')');
+  }
+
+  // ---- Fixtures ----
+
+  // 5x5 grid:
+  //   x: 0     1     2     3     4
+  // y0  F(1)  F(2)  F(3)  F(4)  F(5)
+  // y1  F(6)  W(7)  F(8)  F(9)  F(10)
+  // y2  F(11) F(12) F(13) P(14) F(15)
+  // y3  F(16) F(17) F(18) F(19) S(20)
+  // y4  F(21) F(22) F(23) F(24) F(25)
+
+  var tiles = {};
+  var id = 1;
+  for (var fy = 0; fy < 5; fy++) {
+    for (var fx = 0; fx < 5; fx++) {
+      var type = 'floor';
+      if (fx === 1 && fy === 1) { type = 'wall'; }
+      if (fx === 3 && fy === 2) { type = 'pillar'; }
+      if (fx === 4 && fy === 3) { type = 'spikes'; }
+      tiles[String(id)] = { id: String(id), x: fx, y: fy, type: type };
+      id++;
+    }
+  }
+
+  function tAt(x, y) {
+    for (var tid in tiles) { if (parseInt(tiles[tid].x) === x && parseInt(tiles[tid].y) === y) return tiles[tid]; }
+    return null;
+  }
+
+  var entities = {
+    h1: { id: 'h1', type: 'hero', tile_id: '1', state: 'active', health: 10, owner: 'p1', status: '' },
+    m1: { id: 'm1', type: 'monster', type_arg: 1, tile_id: '3', state: 'active', health: 3, status: '' },
+    m2: { id: 'm2', type: 'monster', type_arg: SLIME_TYPE_ARG, tile_id: '9', state: 'active', health: 2, status: '' },
+    b1: { id: 'b1', type: 'boss', tile_id: '25', state: 'active', health: 20, status: '' },
+    d1: { id: 'd1', type: 'monster', type_arg: 1, tile_id: '4', state: 'dead', health: 0, status: '' }
+  };
+
+  // ---- Tests ----
+
+  // -- powerDistance --
+  suite('powerDistance');
+  eq(GR.powerDistance({ x: 0, y: 0 }, { x: 2, y: 0 }, 'orthogonal'), 2, 'manhattan horizontal');
+  eq(GR.powerDistance({ x: 0, y: 0 }, { x: 0, y: 3 }, 'orthogonal'), 3, 'manhattan vertical');
+  eq(GR.powerDistance({ x: 0, y: 0 }, { x: 2, y: 3 }, 'orthogonal'), 5, 'manhattan diagonal');
+  eq(GR.powerDistance({ x: 0, y: 0 }, { x: 2, y: 0 }, 'chebyshev'), 2, 'chebyshev horizontal');
+  eq(GR.powerDistance({ x: 0, y: 0 }, { x: 2, y: 3 }, 'chebyshev'), 3, 'chebyshev diagonal');
+  eq(GR.powerDistance({ x: 1, y: 1 }, { x: 1, y: 1 }, 'orthogonal'), 0, 'same tile = 0');
+
+  // -- hasBlockingTileAt --
+  suite('hasBlockingTileAt');
+  eq(GR.hasBlockingTileAt(1, 1, tiles), true, 'wall at (1,1) blocks');
+  eq(GR.hasBlockingTileAt(3, 2, tiles), true, 'pillar at (3,2) blocks');
+  eq(GR.hasBlockingTileAt(0, 0, tiles), false, 'floor at (0,0) does not block');
+  eq(GR.hasBlockingTileAt(4, 3, tiles), false, 'spikes at (4,3) do not block (walkable)');
+  eq(GR.hasBlockingTileAt(9, 9, tiles), false, 'out-of-grid coordinate returns false');
+
+  // -- hasLineOfSight --
+  suite('hasLineOfSight');
+  eq(GR.hasLineOfSight(tAt(0, 0), tAt(2, 0), tiles), true, 'horizontal clear (0,0)->(2,0)');
+  eq(GR.hasLineOfSight(tAt(0, 0), tAt(0, 3), tiles), true, 'vertical clear (0,0)->(0,3)');
+  eq(GR.hasLineOfSight(tAt(2, 0), tAt(2, 2), tiles), true, 'vertical clear (2,0)->(2,2)');
+  eq(GR.hasLineOfSight(tAt(0, 0), tAt(2, 2), tiles), false, 'diagonal blocked by wall at (1,1)');
+  eq(GR.hasLineOfSight(tAt(0, 2), tAt(2, 0), tiles), false, 'diagonal blocked by wall at (1,1) reverse');
+  eq(GR.hasLineOfSight(tAt(0, 0), tAt(0, 0), tiles), true, 'same tile always visible');
+  eq(GR.hasLineOfSight(null, tAt(0, 0), tiles), false, 'null from returns false');
+  eq(GR.hasLineOfSight(tAt(0, 0), null, tiles), false, 'null to returns false');
+  eq(GR.hasLineOfSight(tAt(0, 3), tAt(4, 3), tiles), true, 'horizontal clear row 3');
+  eq(GR.hasLineOfSight(tAt(3, 3), tAt(4, 4), tiles), true, 'diagonal clear (3,3)->(4,4)');
+
+  // -- isTileInMonsterFrontArc --
+  suite('isTileInMonsterFrontArc');
+  var center = tAt(2, 2);
+  eq(GR.isTileInMonsterFrontArc(center, tAt(3, 3)), true, 'diagonal adjacent (3,3)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(1, 1)), true, 'diagonal adjacent (1,1)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(3, 2)), true, 'orthogonal adjacent (3,2)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(2, 3)), true, 'orthogonal adjacent (2,3)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(4, 2)), false, 'distance 2 not in arc (4,2)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(2, 4)), false, 'distance 2 not in arc (2,4)');
+  eq(GR.isTileInMonsterFrontArc(center, tAt(2, 2)), false, 'same tile not in arc');
+
+  // -- isWalkableTile --
+  suite('isWalkableTile');
+  eq(GR.isWalkableTile({ type: 'floor' }), true, 'floor is walkable');
+  eq(GR.isWalkableTile({ type: 'spikes' }), true, 'spikes is walkable');
+  eq(GR.isWalkableTile({ type: 'wall' }), false, 'wall is not walkable');
+  eq(GR.isWalkableTile({ type: 'pillar' }), false, 'pillar is not walkable');
+  eq(GR.isWalkableTile({ type: 'hole' }), false, 'hole is not walkable');
+
+  // -- isTileOccupied --
+  suite('isTileOccupied');
+  eq(GR.isTileOccupied('1', entities), true, 'tile 1 occupied by hero h1');
+  eq(GR.isTileOccupied('3', entities), true, 'tile 3 occupied by monster m1');
+  eq(GR.isTileOccupied('25', entities), true, 'tile 25 occupied by boss b1');
+  eq(GR.isTileOccupied('4', entities), false, 'tile 4 has dead monster d1 — ignored');
+  eq(GR.isTileOccupied('5', entities), false, 'tile 5 is empty');
+
+  // -- entityOnTile --
+  suite('entityOnTile');
+  eq(GR.entityOnTile('1', entities, ['hero']), 'h1', 'hero on tile 1');
+  eq(GR.entityOnTile('3', entities, MONSTER_TYPES), 'm1', 'monster on tile 3');
+  eq(GR.entityOnTile('25', entities, MONSTER_TYPES), 'b1', 'boss on tile 25');
+  eq(GR.entityOnTile('1', entities, MONSTER_TYPES), null, 'no monster on tile 1 (only hero)');
+  eq(GR.entityOnTile('4', entities, MONSTER_TYPES), null, 'dead monster on tile 4 ignored');
+  eq(GR.entityOnTile('5', entities, null), null, 'empty tile returns null');
+  eq(GR.entityOnTile('3', entities, null), 'm1', 'null types = no type filter');
+
+  // -- entitiesAdjacentToTile --
+  suite('entitiesAdjacentToTile');
+  // tile 8 = (2,1). Chebyshev-1 neighbours include (2,0)=m1 and (3,1)=m2
+  var adj8 = GR.entitiesAdjacentToTile('8', tiles, entities, MONSTER_TYPES).sort();
+  deepEq(adj8, ['m1', 'm2'], 'tile 8 has m1 and m2 adjacent');
+
+  // tile 1 = (0,0). Chebyshev-1: (1,0) empty, (0,1) empty, (1,1) wall-no-entity
+  var adj1 = GR.entitiesAdjacentToTile('1', tiles, entities, MONSTER_TYPES);
+  deepEq(adj1, [], 'tile 1 has no adjacent monsters');
+
+  // tile 24 = (3,4). Chebyshev-1 includes (4,4)=b1
+  var adj24 = GR.entitiesAdjacentToTile('24', tiles, entities, MONSTER_TYPES);
+  deepEq(adj24, ['b1'], 'tile 24 has boss b1 adjacent');
+
+  // -- isFreeMoveTile --
+  suite('isFreeMoveTile');
+  var heroTile = tAt(0, 0); // tile 1
+  eq(GR.isFreeMoveTile(heroTile, tAt(1, 0), entities), true, '(1,0) orthogonal-1, floor, unoccupied');
+  eq(GR.isFreeMoveTile(heroTile, tAt(0, 1), entities), true, '(0,1) orthogonal-1, floor, unoccupied');
+  eq(GR.isFreeMoveTile(heroTile, tAt(1, 1), entities), false, '(1,1) is a wall');
+  eq(GR.isFreeMoveTile(heroTile, tAt(2, 0), entities), false, '(2,0) distance 2');
+  eq(GR.isFreeMoveTile(heroTile, tAt(0, 0), entities), false, '(0,0) distance 0');
+  // (2,0) has m1 but distance is 2 so it fails distance first.
+  // test occupied: from (1,0), tile (2,0) has m1 → occupied
+  eq(GR.isFreeMoveTile(tAt(1, 0), tAt(2, 0), entities), false, '(2,0) occupied by m1');
+
+  // -- isTileInPowerRange --
+  suite('isTileInPowerRange');
+  var orthoPower = { range: [1, 3], range_metric: 'orthogonal' };
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(2, 0), orthoPower), true, 'same row, distance 2, range [1,3]');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(0, 3), orthoPower), true, 'same col, distance 3, range [1,3]');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(0, 4), orthoPower), false, 'same col, distance 4, out of range');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(0, 0), orthoPower), false, 'same tile, distance 0, below min range');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(1, 1), orthoPower), false, 'diagonal, not same row/col');
+
+  var chebPower = { range: [1, 2], range_metric: 'chebyshev' };
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(1, 1), chebPower), true, 'chebyshev diagonal distance 1');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(2, 2), chebPower), true, 'chebyshev diagonal distance 2');
+  eq(GR.isTileInPowerRange(tAt(0, 0), tAt(3, 3), chebPower), false, 'chebyshev diagonal distance 3 out of range');
+
+  // -- isEntityInPowerRange --
+  suite('isEntityInPowerRange');
+  // hero at (0,0), m1 at tile 3=(2,0). Orthogonal power range [1,3]. Same row, distance 2, clear LoS.
+  eq(GR.isEntityInPowerRange(tAt(0, 0), entities.m1, orthoPower, tiles), true, 'm1 in range and LoS');
+  // hero at (0,0), m2 at tile 9=(3,1). Orthogonal: not same row/col → false
+  eq(GR.isEntityInPowerRange(tAt(0, 0), entities.m2, orthoPower, tiles), false, 'm2 diagonal — orthogonal constraint');
+  // hero at (0,0), b1 at tile 25=(4,4). Distance 8 > range 3
+  eq(GR.isEntityInPowerRange(tAt(0, 0), entities.b1, orthoPower, tiles), false, 'b1 out of range');
+
+  // -- isEntityInPowerRangeIgnoringLoS --
+  suite('isEntityInPowerRangeIgnoringLoS');
+  eq(GR.isEntityInPowerRangeIgnoringLoS(tAt(0, 0), entities.m1, orthoPower, tiles), true, 'm1 in range (LoS ignored)');
+
+  // -- isTileInMonsterAttackRange --
+  suite('isTileInMonsterAttackRange');
+  var meleeMonster = { range: 1, range_metric: 'orthogonal' };
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 0), tAt(3, 0), meleeMonster, tiles), true, 'melee adjacent same row');
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 0), tAt(2, 1), meleeMonster, tiles), true, 'melee adjacent same col');
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 0), tAt(3, 1), meleeMonster, tiles), false, 'melee diagonal not orthogonal');
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 0), tAt(4, 0), meleeMonster, tiles), false, 'melee distance 2 out of range');
+
+  var rangedMonster = { range: 3, min_range: 1, range_metric: 'orthogonal' };
+  eq(GR.isTileInMonsterAttackRange(tAt(0, 0), tAt(3, 0), rangedMonster, tiles), true, 'ranged distance 3 in range');
+  eq(GR.isTileInMonsterAttackRange(tAt(0, 0), tAt(0, 0), rangedMonster, tiles), false, 'ranged distance 0 below min_range');
+
+  var frontArcMonster = { range: 1, range_metric: 'front_arc' };
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 2), tAt(3, 3), frontArcMonster, tiles), true, 'front_arc diagonal adjacent');
+  eq(GR.isTileInMonsterAttackRange(tAt(2, 2), tAt(4, 4), frontArcMonster, tiles), false, 'front_arc distance 2 out');
+
+  // -- hasSlimeStatus --
+  suite('hasSlimeStatus');
+  eq(GR.hasSlimeStatus('slimed'), true, '"slimed" present');
+  eq(GR.hasSlimeStatus('poisoned slimed burned'), true, '"slimed" among multiple statuses');
+  eq(GR.hasSlimeStatus(''), false, 'empty string');
+  eq(GR.hasSlimeStatus(null), false, 'null');
+  eq(GR.hasSlimeStatus('slimy'), false, '"slimy" is not "slimed"');
+  eq(GR.hasSlimeStatus('unslimed'), false, '"unslimed" is not word-boundary match');
+
+  // -- isMovementBlockedBySlime --
+  suite('isMovementBlockedBySlime');
+  var slimedHero = { status: 'slimed' };
+  var cleanHero = { status: '' };
+  eq(GR.isMovementBlockedBySlime({ effect: 'dash' }, slimedHero), false, 'dash not blocked by slime');
+  eq(GR.isMovementBlockedBySlime({ effect: 'dash_attack' }, slimedHero), true, 'dash_attack blocked');
+  eq(GR.isMovementBlockedBySlime({ effect: 'jump' }, slimedHero), true, 'jump blocked');
+  eq(GR.isMovementBlockedBySlime({ effect: 'move_area_attack', distance: [0, 2] }, slimedHero), true, 'move_area_attack with distance>0 blocked');
+  eq(GR.isMovementBlockedBySlime({ effect: 'move_area_attack', distance: [0, 0] }, slimedHero), false, 'move_area_attack with distance 0 not blocked');
+  eq(GR.isMovementBlockedBySlime({ effect: 'attack' }, slimedHero), false, 'attack not a movement power');
+  eq(GR.isMovementBlockedBySlime({ effect: 'jump' }, cleanHero), false, 'clean hero not blocked');
+  eq(GR.isMovementBlockedBySlime(null, slimedHero), false, 'null power returns false');
+
+  // -- isHeroHeldBySlime --
+  suite('isHeroHeldBySlime');
+  // Slime adjacent to hero
+  var slimedEntities = {
+    h1: { id: 'h1', type: 'hero', tile_id: '1', state: 'active', health: 10, status: 'slimed' },
+    slime1: { id: 'slime1', type: 'monster', type_arg: SLIME_TYPE_ARG, tile_id: '2', state: 'active', health: 2, status: '' }
+  };
+  eq(GR.isHeroHeldBySlime(slimedEntities.h1, tiles, slimedEntities), true, 'slimed hero adjacent to slime monster → held');
+
+  // Slime far away
+  var slimedEntitiesFar = {
+    h1: { id: 'h1', type: 'hero', tile_id: '1', state: 'active', health: 10, status: 'slimed' },
+    slime1: { id: 'slime1', type: 'monster', type_arg: SLIME_TYPE_ARG, tile_id: '25', state: 'active', health: 2, status: '' }
+  };
+  eq(GR.isHeroHeldBySlime(slimedEntitiesFar.h1, tiles, slimedEntitiesFar), false, 'slimed hero but slime is far → not held');
+
+  // Hero not slimed
+  var cleanEntities = {
+    h1: { id: 'h1', type: 'hero', tile_id: '1', state: 'active', health: 10, status: '' },
+    slime1: { id: 'slime1', type: 'monster', type_arg: SLIME_TYPE_ARG, tile_id: '2', state: 'active', health: 2, status: '' }
+  };
+  eq(GR.isHeroHeldBySlime(cleanEntities.h1, tiles, cleanEntities), false, 'hero not slimed → not held');
+
+  // -- hasDashAttackDestination --
+  suite('hasDashAttackDestination');
+  var dashPower = { effect: 'dash_attack', range: [1, 3], range_metric: 'orthogonal' };
+  // Hero at (0,0), target m1 on tile 3=(2,0). Landing tile (1,0) is in range, walkable, unoccupied, adjacent to target, has LoS.
+  eq(GR.hasDashAttackDestination(tAt(0, 0), entities.m1, dashPower, tiles, entities), true, 'valid landing at (1,0) next to m1');
+
+  // Hero at (0,0), target b1 on tile 25=(4,4). Distance 8 > range 3 for any landing tile.
+  eq(GR.hasDashAttackDestination(tAt(0, 0), entities.b1, dashPower, tiles, entities), false, 'b1 too far, no valid landing');
+
+  // Null target
+  eq(GR.hasDashAttackDestination(tAt(0, 0), null, dashPower, tiles, entities), false, 'null target returns false');
+
+  // -- isEntityTargetableByPower --
+  suite('isEntityTargetableByPower');
+  var attackPower = { effect: 'attack', range: [1, 3], range_metric: 'orthogonal' };
+  var healPower = { effect: 'heal', range: [0, 2], range_metric: 'chebyshev' };
+
+  // Attack: targets monsters in range
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.m1, attackPower, tiles, entities, null), true, 'attack targets m1 (in range, LoS)');
+  // Attack: does not target heroes
+  eq(GR.isEntityTargetableByPower(tAt(2, 0), entities.h1, attackPower, tiles, entities, null), false, 'attack does not target hero');
+  // Attack: does not target dead
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.d1, attackPower, tiles, entities, null), false, 'attack does not target dead entity');
+
+  // Heal: targets heroes in range
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.h1, healPower, tiles, entities, null), true, 'heal targets hero h1');
+  // Heal: does not target monsters
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.m1, healPower, tiles, entities, null), false, 'heal does not target monster');
+
+  // Dash attack: targets monsters with valid landing
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.m1, dashPower, tiles, entities, null), true, 'dash_attack targets m1 (landing exists)');
+
+  // Jump: targets monsters in range (LoS ignored), if has damage or push
+  var jumpPower = { effect: 'jump', range: [1, 4], range_metric: 'chebyshev', damage: 1 };
+  eq(GR.isEntityTargetableByPower(tAt(0, 0), entities.m1, jumpPower, tiles, entities, null), true, 'jump targets m1 (chebyshev, damage > 0)');
+
+  // -- isTileValidPowerTarget --
+  suite('isTileValidPowerTarget');
+
+  // Dash: walkable + unoccupied + in range
+  var dashOnlyPower = { effect: 'dash', range: [1, 3], range_metric: 'orthogonal' };
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(2, 0), dashOnlyPower, tiles, entities), false, 'dash tile (2,0) occupied by m1');
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(1, 0), dashOnlyPower, tiles, entities), true, 'dash tile (1,0) valid');
+
+  // Attack: must have monster on tile
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(2, 0), attackPower, tiles, entities), true, 'attack tile (2,0) has monster m1');
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(1, 0), attackPower, tiles, entities), false, 'attack tile (1,0) has no monster');
+
+  // Heal: must have hero on tile
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(0, 0), healPower, tiles, entities), true, 'heal tile (0,0) has hero');
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(1, 0), healPower, tiles, entities), false, 'heal tile (1,0) has no hero');
+
+  // Area attack: any tile in range + LoS
+  var areaPower = { effect: 'area_attack', range: [1, 2], range_metric: 'orthogonal' };
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(2, 0), areaPower, tiles, entities), true, 'area_attack any in-range tile');
+
+  // Pull: tile in range with adjacent monsters
+  var pullPower = { effect: 'pull', range: [1, 3], range_metric: 'orthogonal' };
+  // tile 8=(2,1) has adjacent monsters m1=(2,0) and m2=(3,1)
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(0, 1), pullPower, tiles, entities), false, 'pull tile (0,1) no adjacent monsters');
+
+  // Jump: monster on tile (with damage) or empty walkable tile
+  eq(GR.isTileValidPowerTarget(tAt(0, 0), tAt(1, 0), jumpPower, tiles, entities), true, 'jump to empty walkable (1,0)');
+
+  // ---- Summary ----
+  var total = passed + failed;
+  var summaryEl = document.getElementById('summary');
+  summaryEl.textContent = total + ' tests: ' + passed + ' passed, ' + failed + ' failed';
+  summaryEl.className = failed === 0 ? 'pass' : 'fail';
+  console.log(summaryEl.textContent);
+})();
+</script>
+</body>
+</html>

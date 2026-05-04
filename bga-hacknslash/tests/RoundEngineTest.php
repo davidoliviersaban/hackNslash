@@ -5,6 +5,7 @@ use PHPUnit\Framework\TestCase;
 require_once dirname(__DIR__) . '/modules/material/constants.inc.php';
 require_once dirname(__DIR__) . '/modules/HNS_BoardRules.php';
 require_once dirname(__DIR__) . '/modules/HNS_MonsterAi.php';
+require_once dirname(__DIR__) . '/modules/HNS_SeededRandom.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelGenerator.php';
 require_once dirname(__DIR__) . '/modules/HNS_RoomSlotPattern.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelReward.php';
@@ -217,7 +218,7 @@ final class RoundEngineTest extends TestCase
             ],
             'players' => [1 => ['free_move_available' => true, 'main_action_available' => true, 'action_points' => 2]],
             'entities' => [
-                10 => ['type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'stuck'],
+                10 => ['type' => 'hero', 'owner' => 1, 'tile_id' => 1, 'status' => 'slimed'],
                 20 => ['type' => 'monster', 'type_arg' => 2, 'tile_id' => 2, 'state' => 'active'],
             ],
         ];
@@ -425,7 +426,7 @@ final class RoundEngineTest extends TestCase
     {
         $state = ['level' => 1, 'players' => [1 => []], 'player_powers' => [], 'entities' => [20 => ['type' => 'monster', 'state' => 'dead']]];
 
-        $result = HNS_RoundEngine::resolveLevelEnd($state, $this->monsters, array_keys($this->monsters), $this->powers, ['dash_1', 'vortex'], 456);
+        $result = HNS_RoundEngine::resolveLevelEnd($state, $this->monsters, array_keys($this->monsters), $this->powers, ['dash_1', 'vortex_1'], 456);
 
         $this->assertSame(2, $result['state']['level']);
         $this->assertSame('levelCleared', $result['events'][0]['type']);

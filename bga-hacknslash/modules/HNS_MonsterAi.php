@@ -9,7 +9,7 @@ final class HNS_MonsterAi
      */
     public static function activate(int $monsterEntityId, array $state, array $monsterMaterial): array
     {
-        self::assertEntityExists($state, $monsterEntityId);
+        HNS_BoardRules::assertEntityExists($state, $monsterEntityId);
 
         $events = [];
         $monster = $state['entities'][$monsterEntityId];
@@ -47,7 +47,7 @@ final class HNS_MonsterAi
             $state = self::moveToAttackRange($monsterEntityId, $targetHeroId, $state, $monsterMaterial, $events);
         }
 
-        if (($monsterMaterial['effect'] ?? null) === 'stick' && self::canAttack($monsterEntityId, $targetHeroId, $state, $monsterMaterial)) {
+        if (($monsterMaterial['effect'] ?? null) === 'slime' && self::canAttack($monsterEntityId, $targetHeroId, $state, $monsterMaterial)) {
             $state = self::attack($monsterEntityId, $targetHeroId, $state, $monsterMaterial, $events);
         }
 
@@ -57,7 +57,7 @@ final class HNS_MonsterAi
     /** @param array<string, mixed> $state */
     private static function closestHeroId(int $monsterEntityId, array $state): ?int
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
         $closestHeroId = null;
         $closestDistance = PHP_INT_MAX;
 
@@ -66,7 +66,7 @@ final class HNS_MonsterAi
                 continue;
             }
 
-            $distance = HNS_BoardRules::distance($monsterTile, self::entityTile((int) $entityId, $state));
+            $distance = HNS_BoardRules::distance($monsterTile, HNS_BoardRules::entityTile($state, (int) $entityId));
             if ($distance < $closestDistance || ($distance === $closestDistance && (int) $entityId < (int) $closestHeroId)) {
                 $closestDistance = $distance;
                 $closestHeroId = (int) $entityId;
@@ -82,8 +82,8 @@ final class HNS_MonsterAi
      */
     private static function canAttack(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial): bool
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
-        $heroTile = self::entityTile($heroEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $heroTile = HNS_BoardRules::entityTile($state, $heroEntityId);
         $maxRange = (int) ($monsterMaterial['range'] ?? 0);
         $range = [(int) ($monsterMaterial['min_range'] ?? ($maxRange > 0 ? 1 : 0)), $maxRange];
 
@@ -110,9 +110,9 @@ final class HNS_MonsterAi
     private static function attack(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
         $damage = (int) ($monsterMaterial['damage'] ?? 0);
-        if (($monsterMaterial['effect'] ?? 'damage') === 'stick') {
+        if (($monsterMaterial['effect'] ?? 'damage') === 'slime') {
             $state['entities'][$heroEntityId]['status'] = 'slimed';
-            $events[] = ['type' => 'monsterStick', 'source_entity_id' => $monsterEntityId, 'target_entity_id' => $heroEntityId];
+            $events[] = ['type' => 'monsterSlime', 'source_entity_id' => $monsterEntityId, 'target_entity_id' => $heroEntityId];
 
             return $state;
         }
@@ -121,7 +121,7 @@ final class HNS_MonsterAi
             return self::explode($monsterEntityId, $state, $monsterMaterial, $events);
         }
 
-        if (($monsterMaterial['effect'] ?? 'damage') === 'front_arc_damage') {
+        if (($monsterMaterial['effect'] ?? 'damage') === 'front_arc') {
             return self::frontArcAttack($monsterEntityId, $heroEntityId, $state, $monsterMaterial, $events);
         }
 
@@ -151,7 +151,7 @@ final class HNS_MonsterAi
     {
         $summonTile = self::bestAdjacentSummonTile($monsterEntityId, $state);
         if ($summonTile !== null) {
-            $summonedEntityId = self::nextEntityId($state['entities']);
+            $summonedEntityId = HNS_GameEngine::nextEntityId($state['entities']);
             $summonedEntity = [
                 'id' => $summonedEntityId,
                 'type' => 'monster',
@@ -177,7 +177,7 @@ final class HNS_MonsterAi
     /** @param array<string, mixed> $state */
     private static function bestAdjacentSummonTile(int $monsterEntityId, array $state): ?array
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
         foreach ($state['tiles'] as $tile) {
             if (HNS_BoardRules::distance($monsterTile, $tile) !== 1 || !HNS_BoardRules::isTileWalkable($tile)) {
                 continue;
@@ -195,8 +195,8 @@ final class HNS_MonsterAi
     /** @param array<string, mixed> $state */
     private static function bestAdjacentTileAwayFrom(int $monsterEntityId, int $heroEntityId, array $state): ?array
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
-        $heroTile = self::entityTile($heroEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $heroTile = HNS_BoardRules::entityTile($state, $heroEntityId);
         $currentDistance = HNS_BoardRules::distance($monsterTile, $heroTile);
         $bestTile = null;
         $bestDistance = $currentDistance;
@@ -220,12 +220,6 @@ final class HNS_MonsterAi
         return $bestTile;
     }
 
-    /** @param array<int, array<string, mixed>> $entities */
-    private static function nextEntityId(array $entities): int
-    {
-        return max(array_map('intval', array_keys($entities))) + 1;
-    }
-
     /**
      * @param array<string, mixed> $state
      * @param array<string, mixed> $monsterMaterial
@@ -234,8 +228,8 @@ final class HNS_MonsterAi
      */
     private static function chargeAttack(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
-        $heroTile = self::entityTile($heroEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $heroTile = HNS_BoardRules::entityTile($state, $heroEntityId);
         $dx = (int) $heroTile['x'] - (int) $monsterTile['x'];
         $dy = (int) $heroTile['y'] - (int) $monsterTile['y'];
         $pushX = (int) $heroTile['x'] + $dx;
@@ -271,8 +265,8 @@ final class HNS_MonsterAi
      */
     private static function frontArcAttack(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
-        $heroTile = self::entityTile($heroEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $heroTile = HNS_BoardRules::entityTile($state, $heroEntityId);
         $direction = self::frontDirection($monsterTile, $heroTile);
         $damage = (int) ($monsterMaterial['damage'] ?? 0);
         $targetHeroIds = [];
@@ -282,10 +276,10 @@ final class HNS_MonsterAi
                 continue;
             }
 
-            if (!self::isTileInFrontArc($monsterTile, self::entityTile((int) $entityId, $state), $direction)) {
+            if (!self::isTileInFrontArc($monsterTile, HNS_BoardRules::entityTile($state, (int) $entityId), $direction)) {
                 continue;
             }
-            if (!HNS_BoardRules::hasLineOfSight($monsterTile, self::entityTile((int) $entityId, $state), $state['tiles'])) {
+            if (!HNS_BoardRules::hasLineOfSight($monsterTile, HNS_BoardRules::entityTile($state, (int) $entityId), $state['tiles'])) {
                 continue;
             }
 
@@ -296,7 +290,7 @@ final class HNS_MonsterAi
             $targetHeroIds[] = (int) $entityId;
         }
 
-        $events[] = ['type' => 'monsterFrontArcAttack', 'source_entity_id' => $monsterEntityId, 'target_entity_ids' => $targetHeroIds, 'damage' => $damage];
+        $events[] = ['type' => 'monsterFrontArc', 'source_entity_id' => $monsterEntityId, 'target_entity_ids' => $targetHeroIds, 'damage' => $damage];
 
         return $state;
     }
@@ -343,7 +337,7 @@ final class HNS_MonsterAi
      */
     public static function explode(int $monsterEntityId, array $state, array $monsterMaterial, array &$events): array
     {
-        $monsterTile = self::entityTile($monsterEntityId, $state);
+        $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
         $damage = (int) ($monsterMaterial['damage'] ?? 0);
         $targetHeroIds = [];
         $targetHealthByEntityId = [];
@@ -353,7 +347,7 @@ final class HNS_MonsterAi
                 continue;
             }
 
-            if (!HNS_BoardRules::isInOrthogonalRange($monsterTile, self::entityTile((int) $entityId, $state), [1, 1])) {
+            if (!HNS_BoardRules::isInOrthogonalRange($monsterTile, HNS_BoardRules::entityTile($state, (int) $entityId), [1, 1])) {
                 continue;
             }
 
@@ -381,14 +375,10 @@ final class HNS_MonsterAi
     private static function moveToward(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
         $steps = (int) ($monsterMaterial['move'] ?? 0);
-        for ($step = 0; $step < $steps; $step++) {
-            $currentTile = self::entityTile($monsterEntityId, $state);
-            $targetTile = self::entityTile($heroEntityId, $state);
-            $nextTile = self::bestAdjacentTileToward($currentTile, $targetTile, $state['tiles'], $state['entities'], $monsterEntityId, $monsterMaterial['move_metric'] ?? 'orthogonal');
-            if ($nextTile === null) {
-                break;
-            }
-
+        $currentTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $targetTile = HNS_BoardRules::entityTile($state, $heroEntityId);
+        $nextTile = self::bestReachableTileToward($currentTile, $targetTile, $state['tiles'], $state['entities'], $monsterEntityId, $monsterMaterial, $steps);
+        if ($nextTile !== null && (int) $nextTile['id'] !== (int) $currentTile['id']) {
             $state['entities'][$monsterEntityId]['tile_id'] = (int) $nextTile['id'];
             $events[] = ['type' => 'monsterMove', 'source_entity_id' => $monsterEntityId, 'target_tile_id' => (int) $nextTile['id']];
         }
@@ -420,14 +410,10 @@ final class HNS_MonsterAi
     private static function moveTowardPreferredRange(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
         $steps = (int) ($monsterMaterial['move'] ?? 0);
-        for ($step = 0; $step < $steps; $step++) {
-            $currentTile = self::entityTile($monsterEntityId, $state);
-            $targetTile = self::entityTile($heroEntityId, $state);
-            $nextTile = self::bestAdjacentTileTowardPreferredRange($currentTile, $targetTile, $state['tiles'], $state['entities'], $monsterEntityId, $monsterMaterial);
-            if ($nextTile === null) {
-                break;
-            }
-
+        $currentTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
+        $targetTile = HNS_BoardRules::entityTile($state, $heroEntityId);
+        $nextTile = self::bestReachableTileTowardPreferredRange($currentTile, $targetTile, $state['tiles'], $state['entities'], $monsterEntityId, $monsterMaterial, $steps);
+        if ($nextTile !== null && (int) $nextTile['id'] !== (int) $currentTile['id']) {
             $state['entities'][$monsterEntityId]['tile_id'] = (int) $nextTile['id'];
             $events[] = ['type' => 'monsterMove', 'source_entity_id' => $monsterEntityId, 'target_tile_id' => (int) $nextTile['id']];
         }
@@ -478,6 +464,49 @@ final class HNS_MonsterAi
      * @param array<string, mixed> $monsterMaterial
      * @return array<string, mixed>|null
      */
+    private static function bestReachableTileToward(array $from, array $to, array $tiles, array $entities, int $movingEntityId, array $monsterMaterial, int $maxSteps): ?array
+    {
+        $moveMetric = $monsterMaterial['move_metric'] ?? 'orthogonal';
+        $distanceFn = $moveMetric === 'chebyshev'
+            ? static fn (array $left, array $right): int => HNS_BoardRules::diagonalDistance($left, $right)
+            : static fn (array $left, array $right): int => HNS_BoardRules::distance($left, $right);
+        $currentPathDistance = self::shortestPathDistance($from, $to, $tiles, $entities, $movingEntityId, $moveMetric) ?? $distanceFn($from, $to);
+        $bestTile = null;
+        $bestPathDistance = $currentPathDistance;
+        $bestDirectDistance = $distanceFn($from, $to);
+        $bestSteps = PHP_INT_MAX;
+        $requiresFullMove = ($monsterMaterial['effect'] ?? null) === 'charge';
+
+        foreach (self::reachableTilesBySteps($from, $tiles, $entities, $movingEntityId, $moveMetric, $maxSteps) as $tileId => $steps) {
+            if ($requiresFullMove && $steps < $maxSteps) {
+                continue;
+            }
+
+            $tile = $tiles[$tileId];
+            $pathDistance = self::shortestPathDistance($tile, $to, $tiles, $entities, $movingEntityId, $moveMetric);
+            if ($pathDistance === null) {
+                continue;
+            }
+            $directDistance = $distanceFn($tile, $to);
+            if ($pathDistance < $bestPathDistance || ($pathDistance === $bestPathDistance && ($directDistance < $bestDirectDistance || ($directDistance === $bestDirectDistance && ($steps < $bestSteps || ($steps === $bestSteps && (int) $tile['id'] < (int) ($bestTile['id'] ?? PHP_INT_MAX))))))) {
+                $bestPathDistance = $pathDistance;
+                $bestDirectDistance = $directDistance;
+                $bestSteps = $steps;
+                $bestTile = $tile;
+            }
+        }
+
+        return $bestTile;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $to
+     * @param array<int, array<string, mixed>> $tiles
+     * @param array<int, array<string, mixed>> $entities
+     * @param array<string, mixed> $monsterMaterial
+     * @return array<string, mixed>|null
+     */
     private static function bestAdjacentTileTowardPreferredRange(array $from, array $to, array $tiles, array $entities, int $movingEntityId, array $monsterMaterial): ?array
     {
         $moveDistanceFn = ($monsterMaterial['move_metric'] ?? 'orthogonal') === 'chebyshev'
@@ -513,6 +542,170 @@ final class HNS_MonsterAi
         return $bestTile;
     }
 
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $to
+     * @param array<int, array<string, mixed>> $tiles
+     * @param array<int, array<string, mixed>> $entities
+     * @param array<string, mixed> $monsterMaterial
+     * @return array<string, mixed>|null
+     */
+    private static function bestReachableTileTowardPreferredRange(array $from, array $to, array $tiles, array $entities, int $movingEntityId, array $monsterMaterial, int $maxSteps): ?array
+    {
+        $moveMetric = $monsterMaterial['move_metric'] ?? 'orthogonal';
+        $rangeDistanceFn = ($monsterMaterial['range_metric'] ?? 'orthogonal') === 'chebyshev'
+            ? static fn (array $left, array $right): int => HNS_BoardRules::diagonalDistance($left, $right)
+            : static fn (array $left, array $right): int => HNS_BoardRules::distance($left, $right);
+        $minRange = (int) ($monsterMaterial['min_range'] ?? 1);
+        $maxRange = (int) ($monsterMaterial['range'] ?? 0);
+        $bestTile = null;
+        $bestScore = self::rangeBandScore($rangeDistanceFn($from, $to), $minRange, $maxRange);
+        $bestDistance = $rangeDistanceFn($from, $to);
+        $bestSteps = PHP_INT_MAX;
+
+        foreach (self::reachableTilesBySteps($from, $tiles, $entities, $movingEntityId, $moveMetric, $maxSteps) as $tileId => $steps) {
+            $tile = $tiles[$tileId];
+            if (($monsterMaterial['range_metric'] ?? 'orthogonal') === 'orthogonal' && (int) $tile['x'] !== (int) $to['x'] && (int) $tile['y'] !== (int) $to['y']) {
+                continue;
+            }
+
+            $distance = $rangeDistanceFn($tile, $to);
+            $score = self::rangeBandScore($distance, $minRange, $maxRange);
+            if ($score < $bestScore || ($score === $bestScore && ($distance > $bestDistance || ($distance === $bestDistance && ($steps < $bestSteps || ($steps === $bestSteps && (int) $tile['id'] < (int) ($bestTile['id'] ?? PHP_INT_MAX))))))) {
+                $bestScore = $score;
+                $bestDistance = $distance;
+                $bestSteps = $steps;
+                $bestTile = $tile;
+            }
+        }
+
+        return $bestTile;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<int, array<string, mixed>> $tiles
+     * @param array<int, array<string, mixed>> $entities
+     * @return array<int, int>
+     */
+    private static function reachableTilesBySteps(array $from, array $tiles, array $entities, int $movingEntityId, string $moveMetric, int $maxSteps): array
+    {
+        if ($maxSteps <= 0) {
+            return [];
+        }
+
+        $queue = [(int) $from['id']];
+        $stepsByTileId = [(int) $from['id'] => 0];
+
+        for ($index = 0; $index < count($queue); $index++) {
+            $currentTileId = $queue[$index];
+            $currentTile = $tiles[$currentTileId];
+            $currentSteps = $stepsByTileId[$currentTileId];
+            if ($currentSteps >= $maxSteps) {
+                continue;
+            }
+
+            foreach (self::neighboursForMoveMetric($currentTile, $tiles, $moveMetric) as $tile) {
+                $tileId = (int) $tile['id'];
+                if (isset($stepsByTileId[$tileId]) || !HNS_BoardRules::isTileWalkable($tile)) {
+                    continue;
+                }
+                if (!HNS_BoardRules::canEnterTile($tileId, $entities, $entities[$movingEntityId], $movingEntityId)) {
+                    continue;
+                }
+
+                $stepsByTileId[$tileId] = $currentSteps + 1;
+                $queue[] = $tileId;
+            }
+        }
+
+        unset($stepsByTileId[(int) $from['id']]);
+
+        return $stepsByTileId;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $to
+     * @param array<int, array<string, mixed>> $tiles
+     * @param array<int, array<string, mixed>> $entities
+     */
+    private static function shortestPathDistance(array $from, array $to, array $tiles, array $entities, int $movingEntityId, string $moveMetric): ?int
+    {
+        $targetTileId = (int) $to['id'];
+        $queue = [(int) $from['id']];
+        $stepsByTileId = [(int) $from['id'] => 0];
+
+        for ($index = 0; $index < count($queue); $index++) {
+            $currentTileId = $queue[$index];
+            if ($currentTileId === $targetTileId) {
+                return $stepsByTileId[$currentTileId];
+            }
+
+            $currentTile = $tiles[$currentTileId];
+            foreach (self::neighboursForMoveMetric($currentTile, $tiles, $moveMetric) as $tile) {
+                $tileId = (int) $tile['id'];
+                if (isset($stepsByTileId[$tileId]) || !HNS_BoardRules::isTileWalkable($tile)) {
+                    continue;
+                }
+                if ($tileId !== $targetTileId && !HNS_BoardRules::canEnterTile($tileId, $entities, $entities[$movingEntityId], $movingEntityId)) {
+                    continue;
+                }
+
+                $stepsByTileId[$tileId] = $stepsByTileId[$currentTileId] + 1;
+                $queue[] = $tileId;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $tile
+     * @param array<int, array<string, mixed>> $tiles
+     * @return array<int, array<string, mixed>>
+     */
+    private static function neighboursForMoveMetric(array $tile, array $tiles, string $moveMetric): array
+    {
+        return $moveMetric === 'chebyshev'
+            ? self::chebyshevNeighbours($tile, $tiles)
+            : self::orthogonalNeighbours($tile, $tiles);
+    }
+
+    /**
+     * @param array<string, mixed> $tile
+     * @param array<int, array<string, mixed>> $tiles
+     * @return array<int, array<string, mixed>>
+     */
+    private static function orthogonalNeighbours(array $tile, array $tiles): array
+    {
+        $neighbours = [];
+        foreach ($tiles as $candidate) {
+            if (HNS_BoardRules::distance($tile, $candidate) === 1) {
+                $neighbours[] = $candidate;
+            }
+        }
+
+        return $neighbours;
+    }
+
+    /**
+     * @param array<string, mixed> $tile
+     * @param array<int, array<string, mixed>> $tiles
+     * @return array<int, array<string, mixed>>
+     */
+    private static function chebyshevNeighbours(array $tile, array $tiles): array
+    {
+        $neighbours = [];
+        foreach ($tiles as $candidate) {
+            if (HNS_BoardRules::diagonalDistance($tile, $candidate) === 1) {
+                $neighbours[] = $candidate;
+            }
+        }
+
+        return $neighbours;
+    }
+
     private static function rangeBandScore(int $distance, int $minRange, int $maxRange): int
     {
         if ($distance < $minRange) {
@@ -538,22 +731,5 @@ final class HNS_MonsterAi
         }
 
         return null;
-    }
-
-    /** @param array<string, mixed> $state */
-    private static function entityTile(int $entityId, array $state): array
-    {
-        self::assertEntityExists($state, $entityId);
-        $tileId = (int) $state['entities'][$entityId]['tile_id'];
-
-        return $state['tiles'][$tileId];
-    }
-
-    /** @param array<string, mixed> $state */
-    private static function assertEntityExists(array $state, int $entityId): void
-    {
-        if (!isset($state['entities'][$entityId])) {
-            throw new InvalidArgumentException("Unknown entity $entityId.");
-        }
     }
 }

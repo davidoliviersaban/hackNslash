@@ -9,7 +9,7 @@ trait HNS_Player
 
     protected function getActivePlayerActionPoints(): int
     {
-        $playerId = (int) $this->getActivePlayerId();
+        $playerId = $this->currentPlayerIdOrFirstPlayerId();
         return (int) $this->getUniqueValueFromDB("SELECT player_action_points FROM player WHERE player_id = $playerId");
     }
 
@@ -25,6 +25,7 @@ trait HNS_Player
         $this->setGameStateValue('round_number', $round);
         $this->clearFreeActionChain();
         $this->deleteDeadEnemiesForCurrentLevel();
+        $this->clearAllPowerPlaysRemaining();
         $actionPoints = $this->mainActionPointsPerPlayer();
         $mainActionAvailable = $actionPoints > 0 ? 1 : 0;
         $this->DbQuery("UPDATE player SET player_free_move_available = 1, player_main_action_available = $mainActionAvailable, player_action_points = $actionPoints");
@@ -42,25 +43,25 @@ trait HNS_Player
 
     protected function isActivePlayerTurnSpent(): bool
     {
-        $playerId = (int) $this->getActivePlayerId();
+        $playerId = $this->currentPlayerIdOrFirstPlayerId();
         return (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM player WHERE player_id = $playerId AND (player_free_move_available = 1 OR player_main_action_available = 1)") === 0;
     }
 
     protected function isActivePlayerFreeMoveAvailable(): bool
     {
-        $playerId = (int) $this->getActivePlayerId();
+        $playerId = $this->currentPlayerIdOrFirstPlayerId();
         return (int) $this->getUniqueValueFromDB("SELECT player_free_move_available FROM player WHERE player_id = $playerId") === 1;
     }
 
     protected function isActivePlayerMainActionAvailable(): bool
     {
-        $playerId = (int) $this->getActivePlayerId();
+        $playerId = $this->currentPlayerIdOrFirstPlayerId();
         return (int) $this->getUniqueValueFromDB("SELECT player_action_points FROM player WHERE player_id = $playerId") > 0;
     }
 
     protected function isActivePlayerMoveAvailable(): bool
     {
-        $playerId = (int) $this->getActivePlayerId();
+        $playerId = $this->currentPlayerIdOrFirstPlayerId();
         return (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM player WHERE player_id = $playerId AND (player_free_move_available = 1 OR player_action_points > 0)") === 1;
     }
 
@@ -72,6 +73,23 @@ trait HNS_Player
 
     protected function getPlayerPowers(): array
     {
-        return $this->getCollectionFromDb('SELECT player_power_id id, player_id, power_slot slot, power_key, power_cooldown cooldown FROM player_power');
+        return $this->getCollectionFromDb('SELECT player_power_id id, player_id, power_slot slot, power_key, power_cooldown cooldown, power_plays_remaining plays_remaining FROM player_power');
+    }
+
+    protected function getPowerPlaysRemaining(int $powerId): int
+    {
+        $value = $this->getUniqueValueFromDB("SELECT power_plays_remaining FROM player_power WHERE player_power_id = $powerId");
+        return (int) ($value ?? 0);
+    }
+
+    protected function setPowerPlaysRemaining(int $powerId, int $value): void
+    {
+        $value = max(0, $value);
+        $this->DbQuery("UPDATE player_power SET power_plays_remaining = $value WHERE player_power_id = $powerId");
+    }
+
+    protected function clearAllPowerPlaysRemaining(): void
+    {
+        $this->DbQuery('UPDATE player_power SET power_plays_remaining = 0');
     }
 }

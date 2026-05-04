@@ -185,4 +185,19 @@ trait HNS_Board
 
         $done = true;
     }
+
+    protected function ensurePowerPlaysRemainingColumn(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $hasColumn = $this->getObjectFromDB("SHOW COLUMNS FROM player_power LIKE 'power_plays_remaining'");
+        if (!$hasColumn) {
+            $this->DbQuery("ALTER TABLE player_power ADD power_plays_remaining TINYINT UNSIGNED NOT NULL DEFAULT 0 AFTER power_cooldown");
+        }
+
+        $done = true;
+    }
 }

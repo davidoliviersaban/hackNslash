@@ -181,7 +181,7 @@ final class HNS_BossEngine
             }
 
             $monsterId = (int) $rng->pick($monsterIds);
-            $entityId = self::nextEntityId($state['entities']);
+            $entityId = HNS_GameEngine::nextEntityId($state['entities']);
             $material = $state['monster_material'][$monsterId] ?? [];
             $state['entities'][$entityId] = [
                 'id' => $entityId,
@@ -226,11 +226,6 @@ final class HNS_BossEngine
     }
 
     /** @param array<int, array<string, mixed>> $entities */
-    private static function nextEntityId(array $entities): int
-    {
-        return max(array_map('intval', array_keys($entities))) + 1;
-    }
-
     /** @param array<string, array<string, mixed>> $bossMaterial */
     public static function initialBossEntity(string $bossKey, int $entityId, int $tileId, array $bossMaterial): array
     {

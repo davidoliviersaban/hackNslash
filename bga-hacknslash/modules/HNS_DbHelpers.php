@@ -5,8 +5,7 @@
  *
  * BGA's Table class provides `escapeStringForDB()` at runtime. We wrap it so the
  * modules can be unit-tested in isolation (the trait is mixed into Hacknslash,
- * which extends Table) and so we do not sprinkle `addslashes()` calls — the
- * latter is not a safe SQL escape mechanism on multibyte connections.
+ * which extends Table).
  */
 trait HNS_DbHelpers
 {
@@ -19,7 +18,15 @@ trait HNS_DbHelpers
             return $this->escapeStringForDB($value);
         }
 
-        return addslashes($value);
+        // Fallback for unit tests: escape the characters that matter for
+        // single-quoted SQL literals.  Unlike addslashes() this does not
+        // mangle multibyte sequences because it only operates on single-byte
+        // ASCII control characters.
+        return str_replace(
+            ["\\", "'", "\0", "\n", "\r", "\x1a"],
+            ["\\\\", "\\'", "\\0", "\\n", "\\r", "\\Z"],
+            $value
+        );
     }
 
     /**

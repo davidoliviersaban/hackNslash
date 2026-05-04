@@ -4,6 +4,7 @@ use PHPUnit\Framework\TestCase;
 
 require_once dirname(__DIR__) . '/modules/HNS_BoardRules.php';
 require_once dirname(__DIR__) . '/modules/HNS_MonsterAi.php';
+require_once dirname(__DIR__) . '/modules/HNS_SeededRandom.php';
 require_once dirname(__DIR__) . '/modules/HNS_LevelGenerator.php';
 require_once dirname(__DIR__) . '/modules/HNS_BossEngine.php';
 

@@ -17,10 +17,11 @@ $machinestates = [
 
     10 => [
         'name' => 'playerTurn',
-        'description' => clienttranslate('${actplayer} ${name}'),
+        'description' => clienttranslate('${name}'),
         'descriptionmyturn' => clienttranslate('${you} ${name}'),
-        'type' => 'activeplayer',
-        'possibleactions' => ['actMove', 'actPlayCard', 'actAttack', 'actChooseReward', 'actSkipFreeMove', 'actSkipMainAction', 'actEndTurn'],
+        'type' => 'multipleactiveplayer',
+        'action' => 'stEnterPlayerTurn',
+        'possibleactions' => ['actMove', 'actPlayCard', 'actChooseReward', 'actSkipFreeMove', 'actSkipMainAction', 'actEndTurn'],
         'args' => 'argPlayerTurn',
         'transitions' => [
             'continueTurn' => 10,
@@ -79,11 +80,23 @@ $machinestates = [
 
     65 => [
         'name' => 'upgradeReward',
-        'description' => clienttranslate('${actplayer} may upgrade and pick a card'),
+        'description' => clienttranslate('Players may upgrade and pick a card'),
         'descriptionmyturn' => clienttranslate('${you} may upgrade and pick a card'),
-        'type' => 'activeplayer',
+        'type' => 'multipleactiveplayer',
+        'action' => 'stEnterUpgradeReward',
         'possibleactions' => ['actChooseReward', 'actSkipReward'],
         'args' => 'argUpgradeReward',
+        'transitions' => [
+            'nextLevel' => 66,
+            'gameEnd' => 99,
+        ],
+    ],
+
+    66 => [
+        'name' => 'startNextLevel',
+        'description' => clienttranslate('Starting next level...'),
+        'type' => 'game',
+        'action' => 'stStartNextLevel',
         'transitions' => [
             'nextLevel' => 10,
             'gameEnd' => 99,

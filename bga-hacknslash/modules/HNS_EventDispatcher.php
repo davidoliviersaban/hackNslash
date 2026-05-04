@@ -39,7 +39,7 @@ trait HNS_EventDispatcher
         if (($event['type'] ?? '') === 'monsterAttack' && !isset($event['target_health'])) {
             $event['target_health'] = $this->entityHealthForEntityId((int) ($event['target_entity_id'] ?? 0));
         }
-        if (in_array($event['type'] ?? '', ['cardPlayed', 'afterCardPlayed'], true) && !isset($event['player_name'])) {
+        if (($event['type'] ?? '') === 'afterCardPlayed' && !isset($event['player_name'])) {
             $event['player_name'] = $this->playerNameForEntityId((int) ($event['source_entity_id'] ?? 0));
         }
 
@@ -75,27 +75,31 @@ trait HNS_EventDispatcher
         static $messages = null;
         if ($messages === null) {
             $messages = [
-                'cardPlayed' => clienttranslate('A power is played'),
                 'afterCardPlayed' => clienttranslate('A power is played'),
+                'afterMove' => '',
                 'afterDash' => '',
                 'afterDashAttack' => '',
                 'afterKill' => '',
                 'afterPushOrPull' => '',
                 'entityDamaged' => '',
-                'entityHealed' => '',
-                'thornsDamage' => clienttranslate('Thorns retaliate'),
+                'entityStatusChanged' => '',
                 'shieldBroken' => clienttranslate('Shield is broken'),
                 'monsterAttack' => clienttranslate('${player_name} is hit by a monster'),
                 'monsterMove' => '',
-                'monsterStick' => clienttranslate('A slime sticks to a hero'),
+                'monsterSlime' => clienttranslate('A slime sticks to a hero'),
                 'monsterCharge' => clienttranslate('A monster charges'),
-                'monsterFrontArcAttack' => clienttranslate('A monster cleaves'),
+                'monsterFrontArc' => clienttranslate('A monster cleaves'),
+                'monsterSummon' => '',
                 'monsterExplode' => clienttranslate('A kamikaze explodes'),
                 'trapDamage' => clienttranslate('A trap triggers'),
                 'bossPhaseDefeated' => clienttranslate('A boss phase is defeated'),
                 'bossPhaseStarted' => clienttranslate('The boss attacks'),
                 'bossSpawnMinion' => clienttranslate('The boss summons reinforcements'),
+                'bossTurnSkipped' => '',
+                'bossGrantShield' => '',
                 'levelCleared' => clienttranslate('Level cleared!'),
+                'levelStarted' => '',
+                'gameLost' => '',
                 'gameWon' => clienttranslate('Heroes are victorious!'),
             ];
         }
