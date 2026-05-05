@@ -574,7 +574,7 @@ define([
   jstpl_hns_entity = '<div id="hns_entity_${id}" class="hns_entity hns_entity_${type} hns_entity_${slug} ${state_class}" data-entity-id="${id}" data-entity-type="${type}" data-monster-key="${monster_key}" role="button" tabindex="-1" aria-label="${label}"><img src="${image}" alt="${label}" /><span class="hns_entity_effects">${effects}</span><span class="hns_entity_health">${health}</span></div>';
   jstpl_hns_monster_card = '<div id="hns_monster_card_${key}" class="hns_monster_card ${state_class}" data-monster-key="${key}" role="button" tabindex="0" aria-label="${name}"><div class="hns_monster_card_effects">${effects}</div><img src="${image}" alt="${name}" /><div class="hns_monster_card_footer"><strong>${name}</strong><span>${count}</span></div><div class="hns_monster_card_losses">${losses}</div></div>';
   jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}" role="button" tabindex="0" aria-label="${name}"><img src="${image}" alt="${name}" /><div class="hns_power_card_name">${name}</div><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
-  jstpl_hns_hero_card = '<div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><span>${health_label}: ${health}</span><span>${ap_label}: ${action_points}</span></div><div class="hns_hero_effects">${effects}</div><div class="hns_hero_mini_powers">${powers}</div>';
+  jstpl_hns_hero_card = '<div class="hns_hero_card_body"><img class="hns_hero_portrait" src="${portrait}" alt="${name}" /><div class="hns_hero_details"><div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><span>${health_label}: ${health}</span><span>${ap_label}: ${action_points}</span></div><div class="hns_hero_effects">${effects}</div></div></div><div class="hns_hero_mini_powers">${powers}</div>';
   jstpl_hns_event = '<div class="hns_event hns_event_${type}">${message}</div>';
   /* eslint-enable no-undef */
 
@@ -892,6 +892,7 @@ define([
       dojo.place(this.format_block('jstpl_hns_hero_card', {
         color: player.color || 'ffffff',
         name: player.name || _('Hero'),
+        portrait: this.getHeroPortraitImage(player.id),
         health_label: _('HP'),
         health: player.health || 0,
         ap_label: _('AP'),
@@ -2307,11 +2308,12 @@ define([
 
     getEntityInfo: function (entity) {
       if (entity.type === 'hero') {
+        var heroKey = this.getHeroVisualKey(entity.owner);
         return {
-          slug: 'hero',
+          slug: heroKey,
           monsterKey: 'hero',
           label: _('Hero'),
-          image: AssetManager.getUrl('tiles/markers/checker-white.webp')
+          image: AssetManager.getUrl('tiles/heroes/' + heroKey + '.webp')
         };
       }
 
@@ -2335,6 +2337,21 @@ define([
         label: monster.name || monsterKey,
         image: AssetManager.getMonsterTileImage(monsterKey)
       };
+    },
+
+    getHeroVisualKey: function (playerId) {
+      var ids = [];
+      var players = this.gamedatas.players || {};
+      for (var id in players) {
+        ids.push(String(id));
+      }
+      ids.sort(function (a, b) { return parseInt(a, 10) - parseInt(b, 10); });
+      var index = Math.max(0, ids.indexOf(String(playerId)));
+      return index === 1 ? 'hero-2' : 'hero-1';
+    },
+
+    getHeroPortraitImage: function (playerId) {
+      return AssetManager.getUrl('cards/heroes/' + this.getHeroVisualKey(playerId) + '.webp');
     },
 
     getVisibleMonsterGroups: function () {

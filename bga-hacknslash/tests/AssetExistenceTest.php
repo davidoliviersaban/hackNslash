@@ -29,9 +29,9 @@ final class AssetExistenceTest extends TestCase
      */
     private static function extractAssetPaths(string $source): array
     {
-        // Capture quoted strings starting with "tiles/" or "cards/" and ending with .webp/.png/.jpg/.jpeg/.svg.
+        // Capture static and concatenated strings starting with "tiles/" or "cards/" and ending with .webp/.png/.jpg/.jpeg/.svg.
         preg_match_all(
-            "#['\"]((?:tiles|cards)/[^'\"\\s]+?\\.(?:webp|png|jpg|jpeg|svg))['\"]#",
+            "#['\"]((?:tiles|cards)/[^'\"\\s+]+?\\.(?:webp|png|jpg|jpeg|svg))['\"]#",
             $source,
             $matches
         );
@@ -189,6 +189,26 @@ final class AssetExistenceTest extends TestCase
         $this->assertStringContainsString('.hns_entity_monster img {', $css);
         $this->assertStringContainsString('width: 46px;', $css);
         $this->assertStringContainsString('height: 46px;', $css);
+    }
+
+    public function testHeroAssetsAreReferencedAndRenderAsSpritesAndPortraits(): void
+    {
+        $root = dirname(__DIR__);
+        $css = self::readFile($root . '/hacknslash.css');
+        $js = self::readFile($root . '/hacknslash.js');
+
+        foreach (['hero-1', 'hero-2'] as $heroKey) {
+            $this->assertStringContainsString($heroKey, $js);
+            $this->assertFileExists($root . '/img/tiles/heroes/' . $heroKey . '.webp');
+            $this->assertFileExists($root . '/img/cards/heroes/' . $heroKey . '.webp');
+        }
+
+        $this->assertStringContainsString('getHeroVisualKey', $js);
+        $this->assertStringContainsString("tiles/heroes/' + heroKey + '.webp", $js);
+        $this->assertStringContainsString("cards/heroes/' + this.getHeroVisualKey(playerId) + '.webp", $js);
+        $this->assertStringContainsString('hns_hero_portrait', $js);
+        $this->assertStringContainsString('.hns_entity_hero img {', $css);
+        $this->assertStringContainsString('.hns_hero_portrait {', $css);
     }
 
     public function testBossEntitiesRenderWithSlasherPixelSprite(): void

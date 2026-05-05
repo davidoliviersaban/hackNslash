@@ -133,9 +133,9 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame('orthogonal', $bonus_cards['grab_1']['range_metric']);
         $this->assertSame('chebyshev', $bonus_cards['grab_2']['range_metric']);
         $this->assertSame(1, $bonus_cards['grab_3']['damage']);
-        $this->assertSame(['afterMove'], $bonus_cards['grab_1']['free_triggers']);
-        $this->assertSame(['afterMove'], $bonus_cards['grab_2']['free_triggers']);
-        $this->assertSame(['afterMove'], $bonus_cards['grab_3']['free_triggers']);
+        $this->assertSame(['afterDash'], $bonus_cards['grab_1']['free_triggers']);
+        $this->assertSame(['afterDash'], $bonus_cards['grab_2']['free_triggers']);
+        $this->assertSame(['afterDash'], $bonus_cards['grab_3']['free_triggers']);
 
         $this->assertSame('heal', $bonus_cards['heal_1']['effect']);
         $this->assertSame(1, $bonus_cards['heal_1']['heal']);
@@ -143,6 +143,8 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame(4, $bonus_cards['heal_3']['heal']);
         $this->assertSame([0, 2], $bonus_cards['heal_1']['range']);
         $this->assertSame(['afterKill'], $bonus_cards['heal_1']['free_triggers']);
+        $this->assertSame(['afterKill'], $bonus_cards['heal_2']['free_triggers']);
+        $this->assertSame(['afterKill'], $bonus_cards['heal_3']['free_triggers']);
 
         $this->assertSame('jump', $bonus_cards['jump_1']['effect']);
         $this->assertSame([1, 2], $bonus_cards['jump_1']['distance']);
@@ -156,6 +158,9 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame(['afterMove'], $bonus_cards['jump_3']['free_triggers']);
 
         $this->assertSame('attack', $bonus_cards['leech_1']['effect']);
+        $this->assertSame('chebyshev', $bonus_cards['leech_1']['range_metric']);
+        $this->assertSame('chebyshev', $bonus_cards['leech_2']['range_metric']);
+        $this->assertSame('chebyshev', $bonus_cards['leech_3']['range_metric']);
         $this->assertTrue($bonus_cards['leech_1']['ignores_shield']);
         $this->assertSame(1, $bonus_cards['leech_1']['heal_on_damage']);
         $this->assertSame(1, $bonus_cards['leech_1']['damage']);

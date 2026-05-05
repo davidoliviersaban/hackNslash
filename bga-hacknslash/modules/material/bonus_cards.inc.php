@@ -145,7 +145,7 @@ $bonus_cards = [
         'range_metric' => 'orthogonal',
         'push_distance' => 3,
         'cooldown' => 2,
-        'free_triggers' => ['afterMove'],
+        'free_triggers' => ['afterDash'],
         'upgrades_to' => 'grab_2',
     ],
     'grab_2' => [
@@ -158,7 +158,7 @@ $bonus_cards = [
         'range_metric' => 'chebyshev',
         'push_distance' => 3,
         'cooldown' => 2,
-        'free_triggers' => ['afterMove'],
+        'free_triggers' => ['afterDash'],
         'upgrades_to' => 'grab_3',
     ],
     'grab_3' => [
@@ -171,7 +171,7 @@ $bonus_cards = [
         'range_metric' => 'chebyshev',
         'push_distance' => 3,
         'cooldown' => 2,
-        'free_triggers' => ['afterMove'],
+        'free_triggers' => ['afterDash'],
         'upgrades_to' => null,
     ],
     'heal_1' => [

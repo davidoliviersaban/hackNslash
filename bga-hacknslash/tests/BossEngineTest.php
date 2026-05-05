@@ -73,6 +73,28 @@ final class BossEngineTest extends TestCase
         $this->assertSame('bossSpawnMinion', $events[2]['type']);
     }
 
+    public function testBossShieldActionRepairsAllBrokenShields(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $events = [];
+        $state = $this->bossState(3, $monsters);
+        $state['entities'][20] = ['id' => 20, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 5, 'health' => 1, 'state' => 'active', 'has_shield' => true, 'shield_broken' => true];
+        $state['entities'][30]['has_shield'] = true;
+        $state['entities'][30]['shield_broken'] = true;
+
+        $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
+
+        $this->assertTrue($state['entities'][20]['has_shield']);
+        $this->assertFalse($state['entities'][20]['shield_broken']);
+        $this->assertTrue($state['entities'][30]['has_shield']);
+        $this->assertFalse($state['entities'][30]['shield_broken']);
+        $this->assertSame('bossGrantShield', $events[0]['type']);
+        $this->assertContains(30, $events[0]['target_entity_ids']);
+        $this->assertContains(20, $events[0]['target_entity_ids']);
+    }
+
     private function bossState(int $phase, array $monsters): array
     {
         return [

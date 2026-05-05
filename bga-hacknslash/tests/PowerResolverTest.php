@@ -186,6 +186,24 @@ final class PowerResolverTest extends TestCase
         $this->assertSame('dead', $result['state']['entities'][23]['state']);
     }
 
+    public function testQuickShotDoesNotIgnoreShield(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][22]);
+        $state['entities'][21]['has_shield'] = true;
+        $state['entities'][21]['shield_broken'] = false;
+        $state['entities'][21]['health'] = 2;
+
+        $result = HNS_PowerResolver::resolve('quick_shot_1', 10, ['target_entity_id' => 21], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][21]['health']);
+        $this->assertTrue($result['state']['entities'][21]['shield_broken']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'quick_shot_1'],
+            ['type' => 'shieldBroken', 'source_entity_id' => 21, 'damage_absorbed' => 1],
+        ], $result['events']);
+    }
+
     public function testQuickShotCannotHitAdjacentTarget(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -787,6 +805,18 @@ final class PowerResolverTest extends TestCase
         $this->assertSame(8, $result['state']['entities'][10]['health']);
         $this->assertNotContains('shieldBroken', array_column($result['events'], 'type'));
         $this->assertContains(['type' => 'entityHealed', 'source_entity_id' => 10, 'target_entity_id' => 10, 'heal' => 1, 'target_health' => 8], $result['events']);
+    }
+
+    public function testLeechCanTargetAdjacentDiagonalMonster(): void
+    {
+        $state = $this->state;
+        $state['entities'][10]['health'] = 7;
+        $state['entities'][22] = ['id' => 22, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'health' => 2, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('leech_1', 10, ['target_entity_id' => 22], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][22]['health']);
+        $this->assertSame(8, $result['state']['entities'][10]['health']);
     }
 
     public function testLeechHealsAfterThornsDamage(): void

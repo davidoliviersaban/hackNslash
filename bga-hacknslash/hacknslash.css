@@ -275,8 +275,17 @@
 }
 
 .hns_entity_hero {
-  background: var(--hns-hero-bg);
-  border-color: var(--hns-hero-border);
+  width: 46px;
+  height: 46px;
+  background: transparent;
+  border-color: transparent;
+}
+
+.hns_entity_hero img {
+  width: 46px;
+  height: 46px;
+  max-width: none;
+  transform: translate(-6px, -6px);
 }
 
 .hns_entity_monster {
@@ -803,6 +812,28 @@
 .hns_hero_card {
   display: grid;
   gap: 9px;
+}
+
+.hns_hero_card_body {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.hns_hero_portrait {
+  width: 76px;
+  height: 76px;
+  border: 1px solid var(--hns-border);
+  border-radius: 12px;
+  object-fit: cover;
+  background: var(--hns-bg-dark);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08), 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.hns_hero_details {
+  display: grid;
+  gap: 8px;
 }
 
 .hns_hero_identity {
