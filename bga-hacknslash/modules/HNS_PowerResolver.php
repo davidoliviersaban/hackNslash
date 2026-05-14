@@ -194,7 +194,7 @@ final class HNS_PowerResolver
         }
 
         $rawIds = is_array($payload['target_entity_ids']) ? $payload['target_entity_ids'] : preg_split('/\s+/', (string) $payload['target_entity_ids']);
-        $ids = array_values(array_filter(array_map('intval', $rawIds ?: []), static fn (int $id): bool => $id > 0));
+        $ids = array_values(array_filter(array_map('intval', $rawIds ?: []), static fn(int $id): bool => $id > 0));
 
         return array_slice($ids, 0, 1);
     }
@@ -357,7 +357,7 @@ final class HNS_PowerResolver
             }
             $inArea = $areaMetric === 'chebyshev'
                 ? HNS_BoardRules::isInDiagonalRange($centerTile, $tile, $area)
-                : HNS_BoardRules::isInRange($centerTile, $tile, $area);
+                : HNS_BoardRules::isInOrthogonalRange($centerTile, $tile, $area);
             if ($inArea) {
                 $entityIds[] = (int) $entityId;
             }
@@ -509,7 +509,7 @@ final class HNS_PowerResolver
 
     private static function removeStatusToken(string $status, string $token): ?string
     {
-        $tokens = array_values(array_filter(preg_split('/\s+/', trim($status)) ?: [], static fn (string $value): bool => $value !== '' && $value !== $token));
+        $tokens = array_values(array_filter(preg_split('/\s+/', trim($status)) ?: [], static fn(string $value): bool => $value !== '' && $value !== $token));
 
         return $tokens === [] ? null : implode(' ', $tokens);
     }
@@ -635,7 +635,7 @@ final class HNS_PowerResolver
             }
         }
 
-        usort($candidates, static fn (array $left, array $right): int => (int) $left['id'] <=> (int) $right['id']);
+        usort($candidates, static fn(array $left, array $right): int => (int) $left['id'] <=> (int) $right['id']);
 
         return $candidates[0] ?? null;
     }
@@ -661,17 +661,8 @@ final class HNS_PowerResolver
     private static function resolvePull(int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
         $selectedTileId = (int) ($payload['selected_tile_id'] ?? 0);
-        $targetEntityIds = array_map('intval', $payload['target_entity_ids'] ?? []);
         HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
         HNS_BoardRules::assertTileExists($state, $selectedTileId);
-
-        if (count($targetEntityIds) > (int) $power['targets']) {
-            throw new InvalidArgumentException('Too many targets for pull power.');
-        }
-
-        if (count($targetEntityIds) !== count(array_unique($targetEntityIds))) {
-            throw new InvalidArgumentException('Pull power cannot target the same entity more than once.');
-        }
 
         $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
         $selectedTile = $state['tiles'][$selectedTileId];
@@ -685,13 +676,17 @@ final class HNS_PowerResolver
             throw new InvalidArgumentException('Selected tile is not in line of sight for pull power.');
         }
 
+        $targetEntityIds = self::enemyEntityIdsInArea($selectedTile, $state, $power['area'] ?? [1, 1], $power['area_metric'] ?? 'chebyshev');
+        if ($targetEntityIds === []) {
+            throw new InvalidArgumentException('No pull target in area.');
+        }
+
         $targetEntityIds = self::sortMonstersByMovementOrder($targetEntityIds, $state['entities']);
 
         foreach ($targetEntityIds as $targetEntityId) {
             HNS_BoardRules::assertEntityExists($state, $targetEntityId);
-            $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
-            if (!HNS_BoardRules::isInDiagonalRange($selectedTile, $targetTile, $power['target_range_from_selected_tile'])) {
-                throw new InvalidArgumentException('Pull target is out of range from selected tile.');
+            if (($state['entities'][$targetEntityId]['state'] ?? 'active') !== 'active') {
+                continue;
             }
 
             $state = self::pullEntityTowardTile($targetEntityId, $selectedTileId, (int) $power['pull_distance'], $state, $events, $sourceEntityId);

@@ -197,6 +197,12 @@ final class HNS_RoundEngine
                 continue;
             }
 
+            if (($entity['type'] ?? null) === 'monster' && (int) ($entity['has_shield'] ?? 0) === 1 && (int) ($entity['shield_broken'] ?? 0) !== 1) {
+                $state['entities'][$entityId]['shield_broken'] = true;
+                $events[] = ['type' => 'shieldBroken', 'source_entity_id' => (int) $entityId, 'damage_absorbed' => 1];
+                continue;
+            }
+
             $state['entities'][$entityId]['health'] = max(0, (int) $entity['health'] - 1);
             $events[] = ['type' => 'trapDamage', 'target_entity_id' => (int) $entityId, 'damage' => 1, 'target_health' => (int) $state['entities'][$entityId]['health']];
 

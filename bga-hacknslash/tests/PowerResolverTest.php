@@ -314,12 +314,8 @@ final class PowerResolverTest extends TestCase
         $result = HNS_PowerResolver::resolve('vortex_1', 10, ['selected_tile_id' => 2, 'target_entity_ids' => [21]], $state, $this->powers);
 
         $this->assertSame(10, $result['state']['entities'][10]['health']);
-        $this->assertSame([
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'vortex_1'],
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_KILL, 'source_entity_id' => 10, 'target_entity_id' => 21],
-            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1],
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [21]],
-        ], $result['events']);
+        $this->assertNotContains('thornsDamage', array_column($result['events'], 'type'));
+        $this->assertContains(['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [20, 21, 22]], $result['events']);
     }
 
     public function testGlobalShieldAbilityDoesNotShieldEveryMonster(): void
@@ -581,15 +577,15 @@ final class PowerResolverTest extends TestCase
         HNS_PowerResolver::resolve('dash_1', 10, ['target_tile_id' => 9], $state, $this->powers);
     }
 
-    public function testVortexPullsTargetMonsterOneStepTowardSelectedTileAndEmitsPullEvent(): void
+    public function testVortexPullsEveryMonsterInAreaAndEmitsPullEvent(): void
     {
         $state = $this->state;
-        unset($state['entities'][20], $state['entities'][22]);
+        unset($state['entities'][20], $state['entities'][23]);
 
         $result = HNS_PowerResolver::resolve(
             'vortex_1',
             10,
-            ['selected_tile_id' => 2, 'target_entity_ids' => [21, 23]],
+            ['selected_tile_id' => 2, 'target_entity_ids' => [21]],
             $state,
             $this->powers
         );
@@ -597,27 +593,21 @@ final class PowerResolverTest extends TestCase
         $this->assertSame('dead', $result['state']['entities'][21]['state']);
         $this->assertSame(0, $result['state']['entities'][21]['health']);
         $this->assertSame(2, $result['state']['entities'][21]['tile_id']);
-        $this->assertSame(2, $result['state']['entities'][23]['tile_id']);
-        $this->assertSame(2, $result['state']['entities'][23]['health']);
-        $this->assertSame([
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'vortex_1'],
-            ['type' => 'monsterMove', 'source_entity_id' => 21, 'target_tile_id' => 2],
-            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 23, 'damage' => 1, 'target_health' => 2],
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_KILL, 'source_entity_id' => 10, 'target_entity_id' => 21],
-            ['type' => 'monsterMove', 'source_entity_id' => 23, 'target_tile_id' => 2],
-            ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [21, 23]],
-        ], $result['events']);
+        $this->assertSame(2, $result['state']['entities'][22]['tile_id']);
+        $this->assertSame(2, $result['state']['entities'][22]['health']);
+        $this->assertContains(['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [21, 22]], $result['events']);
     }
 
     public function testVortexCanSelectTileAtDiagonalRangeTwo(): void
     {
         $state = $this->state;
         unset($state['entities'][20], $state['entities'][21], $state['entities'][23]);
+        $state['entities'][22]['tile_id'] = 7;
 
         $result = HNS_PowerResolver::resolve(
             'vortex_1',
             10,
-            ['selected_tile_id' => 5, 'target_entity_ids' => [22]],
+            ['selected_tile_id' => 5],
             $state,
             $this->powers
         );
@@ -626,13 +616,13 @@ final class PowerResolverTest extends TestCase
         $this->assertSame(3, $result['state']['entities'][22]['health']);
     }
 
-    public function testVortexRequiresTargetsAdjacentToSelectedTile(): void
+    public function testVortexRequiresAtLeastOneTargetInArea(): void
     {
         $state = $this->state;
         unset($state['entities'][20], $state['entities'][22], $state['entities'][23]);
 
         $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Pull target is out of range from selected tile.');
+        $this->expectExceptionMessage('No pull target in area.');
 
         HNS_PowerResolver::resolve(
             'vortex_1',
@@ -655,18 +645,22 @@ final class PowerResolverTest extends TestCase
         HNS_PowerResolver::resolve('vortex_1', 10, ['selected_tile_id' => 3, 'target_entity_ids' => [21]], $state, $this->powers);
     }
 
-    public function testVortexCannotTargetTheSameEntityMoreThanOnce(): void
+    public function testVortexIgnoresIncompleteSelectedTargetListAndAffectsFullArea(): void
     {
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('Pull power cannot target the same entity more than once.');
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][22]);
 
-        HNS_PowerResolver::resolve(
+        $result = HNS_PowerResolver::resolve(
             'vortex_2',
             10,
-            ['selected_tile_id' => 2, 'target_entity_ids' => [21, 21]],
-            $this->state,
+            ['selected_tile_id' => 2, 'target_entity_ids' => [21]],
+            $state,
             $this->powers
         );
+
+        $this->assertSame(2, $result['state']['entities'][21]['tile_id']);
+        $this->assertSame(2, $result['state']['entities'][23]['tile_id']);
+        $this->assertContains(['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [21, 23]], $result['events']);
     }
 
     public function testVortexResolvesSmallMonstersBeforeBigMonsters(): void
@@ -707,7 +701,7 @@ final class PowerResolverTest extends TestCase
         $state['entities'][33] = ['id' => 33, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'health' => 1, 'state' => 'active'];
 
         $result = HNS_PowerResolver::resolve(
-            'vortex_1',
+            'vortex_2',
             10,
             ['selected_tile_id' => 2, 'target_entity_ids' => [30, 31]],
             $state,
@@ -734,7 +728,7 @@ final class PowerResolverTest extends TestCase
         $state['entities'][32] = ['id' => 32, 'type' => 'monster', 'monster_size' => 'big', 'tile_id' => 2, 'health' => 4, 'state' => 'active'];
 
         $result = HNS_PowerResolver::resolve(
-            'vortex_1',
+            'vortex_2',
             10,
             ['selected_tile_id' => 2, 'target_entity_ids' => [30, 31]],
             $state,
@@ -760,7 +754,7 @@ final class PowerResolverTest extends TestCase
         $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 7, 'health' => 3, 'state' => 'active'];
 
         $result = HNS_PowerResolver::resolve(
-            'vortex_1',
+            'vortex_2',
             10,
             ['selected_tile_id' => 2, 'target_entity_ids' => [30, 31]],
             $state,
@@ -784,7 +778,7 @@ final class PowerResolverTest extends TestCase
         $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 7, 'health' => 2, 'state' => 'active'];
         $state['entities'][900] = ['id' => 900, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 1, 'monster_size' => 'boss', 'tile_id' => 2, 'health' => 8, 'state' => 'active'];
 
-        $result = HNS_PowerResolver::resolve('vortex_1', 10, ['selected_tile_id' => 2, 'target_entity_ids' => [30]], $state, $this->powers);
+        $result = HNS_PowerResolver::resolve('vortex_2', 10, ['selected_tile_id' => 2, 'target_entity_ids' => [30]], $state, $this->powers);
 
         $this->assertSame(1, $result['state']['entities'][30]['health']);
         $this->assertSame(7, $result['state']['entities'][900]['health']);
@@ -848,12 +842,12 @@ final class PowerResolverTest extends TestCase
         $state['entities'][32] = ['id' => 32, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 5, 'health' => 2, 'state' => 'active'];
         $state['entities'][33] = ['id' => 33, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 10, 'health' => 2, 'state' => 'active'];
 
-        $result = HNS_PowerResolver::resolve('fireball_1', 10, ['target_tile_id' => 7], $state, $this->powers);
+        $result = HNS_PowerResolver::resolve('fireball_3', 10, ['target_tile_id' => 7], $state, $this->powers);
 
         $this->assertSame(2, $result['state']['entities'][30]['health']);
-        $this->assertSame(1, $result['state']['entities'][31]['health']);
-        $this->assertSame(1, $result['state']['entities'][32]['health']);
-        $this->assertSame(1, $result['state']['entities'][33]['health']);
+        $this->assertSame(0, $result['state']['entities'][31]['health']);
+        $this->assertSame(0, $result['state']['entities'][32]['health']);
+        $this->assertSame(0, $result['state']['entities'][33]['health']);
         $this->assertSame('0', $result['state']['entities'][31]['shield_broken']);
         $this->assertNotContains('shieldBroken', array_column($result['events'], 'type'));
     }
@@ -865,7 +859,20 @@ final class PowerResolverTest extends TestCase
 
         $result = HNS_PowerResolver::resolve('fireball_1', 10, ['target_entity_id' => 20], $state, $this->powers);
 
-        $this->assertSame(1, $result['state']['entities'][20]['health']);
+        $this->assertSame(0, $result['state']['entities'][20]['health']);
+    }
+
+    public function testOrthogonalAreaDoesNotHitDiagonalsAtDistanceTwo(): void
+    {
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'health' => 3, 'state' => 'active'];
+        $state['entities'][31] = ['id' => 31, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 7, 'health' => 3, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('fireball_3', 10, ['target_tile_id' => 2], $state, $this->powers);
+
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(3, $result['state']['entities'][31]['health']);
     }
 
     public function testHealCanTargetPartnerWithinRangeAndIsCapped(): void

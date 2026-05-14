@@ -183,6 +183,46 @@ define([
       return ids;
     },
 
+    entitiesInPowerArea: function (tileId, tiles, entities, types, area, metric) {
+      var selectedTile = tiles[tileId];
+      var ids = [];
+      var range = area || [0, 0];
+      var areaMetric = metric || 'orthogonal';
+      if (!selectedTile) { return ids; }
+
+      for (var entityId in entities) {
+        var entity = entities[entityId];
+        if ((entity.state || 'active') !== 'active') { continue; }
+        if (types && types.indexOf(entity.type) === -1) { continue; }
+        var entityTile = tiles[entity.tile_id];
+        if (!entityTile) { continue; }
+        if (areaMetric === 'orthogonal' && String(selectedTile.x) !== String(entityTile.x) && String(selectedTile.y) !== String(entityTile.y)) { continue; }
+        var distance = GameRules.powerDistance(selectedTile, entityTile, areaMetric);
+        if (distance >= parseInt(range[0] || 0, 10) && distance <= parseInt(range[1] || range[0] || 0, 10)) {
+          ids.push(entityId);
+        }
+      }
+      return ids;
+    },
+
+    tilesInPowerArea: function (tileId, tiles, area, metric) {
+      var selectedTile = tiles[tileId];
+      var ids = [];
+      var range = area || [0, 0];
+      var areaMetric = metric || 'orthogonal';
+      if (!selectedTile) { return ids; }
+
+      for (var candidateTileId in tiles) {
+        var tile = tiles[candidateTileId];
+        if (areaMetric === 'orthogonal' && String(selectedTile.x) !== String(tile.x) && String(selectedTile.y) !== String(tile.y)) { continue; }
+        var distance = GameRules.powerDistance(selectedTile, tile, areaMetric);
+        if (distance >= parseInt(range[0] || 0, 10) && distance <= parseInt(range[1] || range[0] || 0, 10)) {
+          ids.push(candidateTileId);
+        }
+      }
+      return ids;
+    },
+
     // -- Movement --
 
     isFreeMoveTile: function (from, tile, entities) {
@@ -287,7 +327,15 @@ define([
       }
       var selectedTile = tiles[selectedPowerTileId];
       var entityTile = tiles[entity.tile_id];
-      return !!selectedTile && !!entityTile && GameRules.powerDistance(selectedTile, entityTile, 'chebyshev') === 1;
+      if (!selectedTile || !entityTile) {
+        return false;
+      }
+      if ((power.area_metric || 'orthogonal') === 'orthogonal' && String(selectedTile.x) !== String(entityTile.x) && String(selectedTile.y) !== String(entityTile.y)) {
+        return false;
+      }
+      var area = power.area || [1, 1];
+      var distance = GameRules.powerDistance(selectedTile, entityTile, power.area_metric || 'orthogonal');
+      return distance >= parseInt(area[0] || 0, 10) && distance <= parseInt(area[1] || area[0] || 0, 10);
     },
 
     isTileValidPowerTarget: function (from, tile, power, tiles, entities) {
@@ -320,7 +368,7 @@ define([
       }
 
       if (power.effect === 'pull') {
-        return GameRules.entitiesAdjacentToTile(tile.id, tiles, entities, MONSTER_TYPES).length > 0;
+        return GameRules.entitiesInPowerArea(tile.id, tiles, entities, MONSTER_TYPES, power.area || [1, 1], power.area_metric || 'orthogonal').length > 0;
       }
 
       if (power.effect === 'area_attack') {
@@ -389,6 +437,18 @@ define([
     },
 
     pickWallVariant: function (tile, tileGrid) {
+      var bounds = tileBounds(tileGrid || {});
+      var x = parseInt(tile.x || 0, 10);
+      var y = parseInt(tile.y || 0, 10);
+      if (x === 0 && y === 0) { return 'tiles/levels/wall-top-left.webp'; }
+      if (x === bounds.maxX && y === 0) { return 'tiles/levels/wall-top-right.webp'; }
+      if (x === 0 && y === bounds.maxY) { return 'tiles/levels/wall-bottom-left.webp'; }
+      if (x === bounds.maxX && y === bounds.maxY) { return 'tiles/levels/wall-bottom-right.webp'; }
+      if (y === 0) { return 'tiles/levels/wall-top.webp'; }
+      if (y === bounds.maxY) { return 'tiles/levels/wall-bottom.webp'; }
+      if (x === 0) { return 'tiles/levels/wall-left.webp'; }
+      if (x === bounds.maxX) { return 'tiles/levels/wall-right.webp'; }
+
       function isOpen(x, y) {
         var n = tileGrid[x + ',' + y];
         return !!n && n.type !== 'wall';
@@ -429,13 +489,16 @@ define([
     },
 
     getBossTileImage: function (bossKey) {
-      var files = { 'slasher': 'tiles/monsters/slasher-pixel.webp' };
+      var files = { 'slasher': 'tiles/monsters/slasher-pixel.webp', 'striker': 'tiles/monsters/striker-pixel.webp' };
       return AssetManager.getUrl(files[bossKey] || files.slasher);
     },
 
     getMonsterCardImage: function (monsterKey) {
       if (monsterKey.indexOf('slasher-') === 0) {
         return AssetManager.getBossCardImage('slasher', parseInt(monsterKey.replace('slasher-', ''), 10));
+      }
+      if (monsterKey.indexOf('striker-') === 0) {
+        return AssetManager.getBossCardImage('striker', parseInt(monsterKey.replace('striker-', ''), 10));
       }
 
       var files = {
@@ -454,7 +517,8 @@ define([
 
     getBossCardImage: function (bossKey, phase) {
       var files = {
-        'slasher': { 1: 'cards/monsters/slasher-1.webp', 2: 'cards/monsters/slasher-2.webp', 3: 'cards/monsters/slasher-3.webp' }
+        'slasher': { 1: 'cards/monsters/slasher-1.webp', 2: 'cards/monsters/slasher-2.webp', 3: 'cards/monsters/slasher-3.webp' },
+        'striker': { 1: 'cards/monsters/striker-1.webp', 2: 'cards/monsters/striker-2.webp', 3: 'cards/monsters/striker-3.webp' }
       };
       var phases = files[bossKey] || files.slasher;
       return AssetManager.getUrl(phases[phase] || phases[1]);
@@ -573,7 +637,7 @@ define([
   jstpl_hns_tile = '<div id="hns_tile_${id}" class="hns_tile hns_tile_${type}" style="left:${left}px; top:${top}px; width:${width}px; height:${height}px; background-image:url(\'${image}\');" data-tile-id="${id}" role="button" tabindex="-1" aria-label="${type}" title="${type}"><span class="hns_spawn_label">${spawn_label}</span></div>';
   jstpl_hns_entity = '<div id="hns_entity_${id}" class="hns_entity hns_entity_${type} hns_entity_${slug} ${state_class}" data-entity-id="${id}" data-entity-type="${type}" data-monster-key="${monster_key}" role="button" tabindex="-1" aria-label="${label}"><img src="${image}" alt="${label}" /><span class="hns_entity_effects">${effects}</span><span class="hns_entity_health">${health}</span></div>';
   jstpl_hns_monster_card = '<div id="hns_monster_card_${key}" class="hns_monster_card ${state_class}" data-monster-key="${key}" role="button" tabindex="0" aria-label="${name}"><div class="hns_monster_card_effects">${effects}</div><img src="${image}" alt="${name}" /><div class="hns_monster_card_footer"><strong>${name}</strong><span>${count}</span></div><div class="hns_monster_card_losses">${losses}</div></div>';
-  jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}" role="button" tabindex="0" aria-label="${name}"><img src="${image}" alt="${name}" /><div class="hns_power_card_name">${name}</div><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
+  jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}" role="button" tabindex="0" aria-label="${name}" title="${name}"><img src="${image}" alt="${name}" /><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
   jstpl_hns_hero_card = '<div class="hns_hero_card_body"><img class="hns_hero_portrait" src="${portrait}" alt="${name}" /><div class="hns_hero_details"><div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><span>${health_label}: ${health}</span><span>${ap_label}: ${action_points}</span></div><div class="hns_hero_effects">${effects}</div></div></div><div class="hns_hero_mini_powers">${powers}</div>';
   jstpl_hns_event = '<div class="hns_event hns_event_${type}">${message}</div>';
   /* eslint-enable no-undef */
@@ -601,6 +665,7 @@ define([
       this.rewardUpgrades = [];
       this.rewardOffersByPlayer = {};
       this.rewardUpgradesByPlayer = {};
+      this.powerCardZoom = 1;
       this.pendingFreeMoveHighlight = false;
       this.pendingMultiTargetAction = false;
       this._dirtyPanels = {};
@@ -663,7 +728,10 @@ define([
         +       '<div id="hns_active_hero" class="hns_hero_card"></div>'
         +     '</div>'
         +     '<div id="hns_hand" class="whiteblock hns_panel">'
-        +       '<h3>' + _('Hero cards') + '</h3>'
+        +       '<div class="hns_hand_header">'
+        +         '<h3>' + _('Hero cards') + '</h3>'
+        +         '<button type="button" id="hns_card_zoom" class="hns_card_zoom" aria-label="' + _('Zoom cards') + '" title="' + _('Zoom cards') + '">&#128269;<span id="hns_card_zoom_level">1</span></button>'
+        +       '</div>'
         +       '<div id="hns_cards"></div>'
         +     '</div>'
         +     '<div id="hns_partner_status" class="whiteblock hns_panel hns_hero_panel hns_partner_panel">'
@@ -679,6 +747,24 @@ define([
 
       if (gameArea) {
         gameArea.insertAdjacentHTML('beforeend', html);
+        this.connect($('hns_card_zoom'), 'onclick', 'onPowerCardZoomClick');
+      }
+    },
+
+    onPowerCardZoomClick: function () {
+      this.powerCardZoom = this.powerCardZoom >= 3 ? 1 : this.powerCardZoom + 1;
+      this.updatePowerCardZoom();
+    },
+
+    updatePowerCardZoom: function () {
+      var cardsNode = $('hns_cards');
+      if (!cardsNode) {
+        return;
+      }
+      dojo.removeClass(cardsNode, 'hns_cards_zoom_1 hns_cards_zoom_2 hns_cards_zoom_3');
+      dojo.addClass(cardsNode, 'hns_cards_zoom_' + (this.powerCardZoom || 1));
+      if ($('hns_card_zoom_level')) {
+        $('hns_card_zoom_level').textContent = String(this.powerCardZoom || 1);
       }
     },
 
@@ -708,6 +794,8 @@ define([
           image: AssetManager.getTileImage(tile, tileGrid)
         }), 'hns_board');
         this.connect($('hns_tile_' + tile.id), 'onclick', 'onTileClick');
+        this.connect($('hns_tile_' + tile.id), 'onmouseenter', 'onTileMouseEnter');
+        this.connect($('hns_tile_' + tile.id), 'onmouseleave', 'onPowerAreaMouseLeave');
       }
 
       for (var entityId in entities) {
@@ -748,6 +836,8 @@ define([
       var box = tileBox(tile, tiles);
       setNodePosition(node, box.left + (box.width / 2), box.top + (box.height / 2));
       this.connect(node, 'onclick', 'onEntityClick');
+      this.connect(node, 'onmouseenter', 'onEntityMouseEnter');
+      this.connect(node, 'onmouseleave', 'onPowerAreaMouseLeave');
     },
 
     updateEntityStackOrder: function (tileId) {
@@ -799,6 +889,9 @@ define([
       }
       if (this.hasThorns(entity)) {
         classes.push('hns_entity_thorns');
+      }
+      if (entity.type === 'monster' && (entity.monster_size || 'small') === 'big') {
+        classes.push('hns_entity_big');
       }
       return classes.join(' ');
     },
@@ -887,7 +980,7 @@ define([
       var effects = this.renderHeroEffects(player);
       var powers = compact ? this.renderHeroMiniPowers(player.id) : '';
       var maxActionPoints = this.getMaxActionPoints();
-      var actionPoints = compact ? '-' : ((player.action_points || 0) + '/' + maxActionPoints);
+      var actionPoints = (player.action_points || 0) + '/' + maxActionPoints;
 
       dojo.place(this.format_block('jstpl_hns_hero_card', {
         color: player.color || 'ffffff',
@@ -904,6 +997,7 @@ define([
 
     renderPowerCards: function () {
       dojo.empty('hns_cards');
+      this.updatePowerCardZoom();
 
       var activePlayerId = this.getActivePlayerId() || this.player_id;
       var powers = this.getPowersForPlayer(activePlayerId);
@@ -1186,7 +1280,7 @@ define([
         }
         var payload = { target_entity_id: entityId };
         var clickedEntity = this.gamedatas.entities && this.gamedatas.entities[entityId];
-        if ((power.effect === 'area_attack' || power.effect === 'jump') && clickedEntity && clickedEntity.tile_id) {
+        if ((power.effect === 'area_attack' || power.effect === 'jump' || power.effect === 'pull') && clickedEntity && clickedEntity.tile_id) {
           payload.target_tile_id = clickedEntity.tile_id;
           payload.selected_tile_id = clickedEntity.tile_id;
         }
@@ -1195,6 +1289,23 @@ define([
       }
 
       this.selectEntity(entityId);
+    },
+
+    onTileMouseEnter: function (evt) {
+      var tileId = evt.currentTarget.getAttribute('data-tile-id');
+      this.previewPowerArea(tileId);
+    },
+
+    onEntityMouseEnter: function (evt) {
+      var entityId = evt.currentTarget.getAttribute('data-entity-id');
+      var entity = this.gamedatas.entities && this.gamedatas.entities[entityId];
+      if (entity && entity.tile_id) {
+        this.previewPowerArea(entity.tile_id);
+      }
+    },
+
+    onPowerAreaMouseLeave: function () {
+      this.clearPowerAreaPreview();
     },
 
     onMonsterCardClick: function (evt) {
@@ -1349,7 +1460,7 @@ define([
     },
 
     requiresConfirmTargets: function () {
-      return this.isSelectedPowerPull() || this.isSelectedPowerMultiAttack() || this.isSelectedPowerDashAttack();
+      return this.isSelectedPowerMultiAttack() || this.isSelectedPowerDashAttack();
     },
 
     toggleConfirmTarget: function (entityId) {
@@ -1409,14 +1520,14 @@ define([
       }
       var tiles = this.gamedatas.tiles || {};
       var entities = this.gamedatas.entities || {};
-      var adjacentIds = GameRules.entitiesAdjacentToTile(this.selectedPowerTileId, tiles, entities, MONSTER_TYPES);
-      var maxTargets = parseInt(this.getPowerInfo(this.selectedPowerKey).targets || 1, 10);
-      var requiredTargets = Math.min(maxTargets, adjacentIds.length);
+      var power = this.getPowerInfo(this.selectedPowerKey);
+      var adjacentIds = GameRules.entitiesInPowerArea(this.selectedPowerTileId, tiles, entities, MONSTER_TYPES, power.area || [1, 1], power.area_metric || 'orthogonal');
+      var requiredTargets = adjacentIds.length;
       if (requiredTargets === 0 || (this.selectedPowerTargetEntityIds || []).length >= requiredTargets) {
         this.playSelectedPower({
           selected_tile_id: this.selectedPowerTileId,
           target_tile_id: this.selectedPowerTileId,
-          target_entity_ids: (this.selectedPowerTargetEntityIds || adjacentIds).slice(0, requiredTargets).join(' ')
+          target_entity_ids: adjacentIds.join(' ')
         });
       }
     },
@@ -1477,7 +1588,8 @@ define([
       var entities = this.gamedatas.entities || {};
 
       if (this.isSelectedPowerPull()) {
-        return GameRules.entitiesAdjacentToTile(this.selectedPowerTileId, tiles, entities, MONSTER_TYPES);
+        var power = this.getPowerInfo(this.selectedPowerKey);
+        return GameRules.entitiesInPowerArea(this.selectedPowerTileId, tiles, entities, MONSTER_TYPES, power.area || [1, 1], power.area_metric || 'orthogonal');
       }
 
       if (this.isSelectedPowerDashAttack()) {
@@ -1904,6 +2016,8 @@ define([
         }
       }
 
+      this.highlightPotentialPowerArea(from, power, tiles, entities);
+
       for (var entityId in entities) {
         var entity = entities[entityId];
         if ((entity.state || 'active') === 'active' && GameRules.isEntityTargetableByPower(from, entity, power, tiles, entities, this.selectedPowerTileId)) {
@@ -1913,7 +2027,62 @@ define([
       }
     },
 
+    highlightPotentialPowerArea: function (from, power, tiles, entities) {
+      if (!this.isAreaPreviewPower(power)) {
+        return;
+      }
+
+      var previewedTileIds = {};
+      for (var centerTileId in tiles) {
+        var centerTile = tiles[centerTileId];
+        if (!GameRules.isTileValidPowerTarget(from, centerTile, power, tiles, entities)) {
+          continue;
+        }
+
+        var areaTileIds = GameRules.tilesInPowerArea(centerTileId, tiles, power.area || [0, 0], power.area_metric || 'orthogonal');
+        for (var i = 0; i < areaTileIds.length; i++) {
+          previewedTileIds[areaTileIds[i]] = true;
+        }
+      }
+
+      for (var tileId in previewedTileIds) {
+        dojo.addClass('hns_tile_' + tileId, 'hns_power_area_candidate_tile');
+      }
+    },
+
+    previewPowerArea: function (tileId) {
+      this.clearPowerAreaPreview();
+      var power = this.getPowerInfo(this.selectedPowerKey);
+      if (!this.isAreaPreviewPower(power)) {
+        return;
+      }
+
+      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var tiles = this.gamedatas.tiles || {};
+      var entities = this.gamedatas.entities || {};
+      var from = hero && tiles[hero.tile_id];
+      var centerTile = tiles[tileId];
+      if (!from || !centerTile || !GameRules.isTileValidPowerTarget(from, centerTile, power, tiles, entities)) {
+        return;
+      }
+
+      var areaTileIds = GameRules.tilesInPowerArea(tileId, tiles, power.area || [0, 0], power.area_metric || 'orthogonal');
+      for (var i = 0; i < areaTileIds.length; i++) {
+        dojo.addClass('hns_tile_' + areaTileIds[i], 'hns_power_area_preview_tile');
+      }
+    },
+
+    isAreaPreviewPower: function (power) {
+      return !!power && !!power.area && ['area_attack', 'move_area_attack', 'pull'].indexOf(power.effect) !== -1;
+    },
+
+    clearPowerAreaPreview: function () {
+      dojo.query('.hns_power_area_preview_tile').removeClass('hns_power_area_preview_tile');
+    },
+
     clearPowerHighlights: function () {
+      this.clearPowerAreaPreview();
+      dojo.query('.hns_power_area_candidate_tile').removeClass('hns_power_area_candidate_tile');
       dojo.query('.hns_power_target_tile').forEach(function (node) {
         dojo.attr(node, 'tabindex', '-1');
       });
@@ -2313,7 +2482,7 @@ define([
           slug: heroKey,
           monsterKey: 'hero',
           label: _('Hero'),
-          image: AssetManager.getUrl('tiles/heroes/' + heroKey + '.webp')
+          image: AssetManager.getUrl('tiles/' + heroKey + '-pixel.webp')
         };
       }
 
@@ -2351,7 +2520,7 @@ define([
     },
 
     getHeroPortraitImage: function (playerId) {
-      return AssetManager.getUrl('cards/heroes/' + this.getHeroVisualKey(playerId) + '.webp');
+      return AssetManager.getUrl('tiles/' + this.getHeroVisualKey(playerId) + '-pixel.webp');
     },
 
     getVisibleMonsterGroups: function () {

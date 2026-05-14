@@ -88,19 +88,21 @@ final class PowerMaterialTest extends TestCase
 
         $this->assertSame('Vortex', $vortex['name']);
         $this->assertSame('pull', $vortex['effect']);
-        $this->assertSame(2, $vortex['targets']);
         $this->assertSame([0, 2], $vortex['range']);
         $this->assertSame('chebyshev', $vortex['range_metric']);
-        $this->assertSame([1, 1], $vortex['target_range_from_selected_tile']);
+        $this->assertSame([0, 1], $vortex['area']);
+        $this->assertSame('orthogonal', $vortex['area_metric']);
         $this->assertSame(1, $vortex['pull_distance']);
         $this->assertSame(2, $vortex['cooldown']);
         $this->assertSame([], $vortex['free_triggers']);
         $this->assertSame('vortex_2', $vortex['upgrades_to']);
         $this->assertSame(2, $bonus_cards['vortex_2']['rank']);
-        $this->assertSame(3, $bonus_cards['vortex_2']['targets']);
+        $this->assertSame([0, 1], $bonus_cards['vortex_2']['area']);
+        $this->assertSame('chebyshev', $bonus_cards['vortex_2']['area_metric']);
         $this->assertSame('vortex_3', $bonus_cards['vortex_2']['upgrades_to']);
         $this->assertSame(3, $bonus_cards['vortex_3']['rank']);
-        $this->assertSame(4, $bonus_cards['vortex_3']['targets']);
+        $this->assertSame([0, 2], $bonus_cards['vortex_3']['area']);
+        $this->assertSame('orthogonal', $bonus_cards['vortex_3']['area_metric']);
         $this->assertNull($bonus_cards['vortex_3']['upgrades_to']);
     }
 

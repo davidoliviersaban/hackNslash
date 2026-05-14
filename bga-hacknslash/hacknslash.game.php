@@ -515,7 +515,15 @@ class Hacknslash extends \Bga\GameFramework\Table
 
     private function playersWithAvailableActions(): array
     {
-        return $this->getCollectionFromDb('SELECT player_id id FROM player WHERE player_free_move_available = 1 OR player_main_action_available = 1');
+        $players = $this->getCollectionFromDb('SELECT player_id id FROM player WHERE player_free_move_available = 1 OR player_main_action_available = 1');
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
+            $playerId = (int) $player['id'];
+            if (!isset($players[$playerId]) && $this->isPlayerFreeActionAvailable($playerId)) {
+                $players[$playerId] = ['id' => $playerId];
+            }
+        }
+
+        return $players;
     }
 
     private function playersWithPendingRewards(): array
@@ -582,10 +590,10 @@ class Hacknslash extends \Bga\GameFramework\Table
 
     private function isPlayerFreeActionAvailable(int $playerId): bool
     {
-        $powers = $this->getCollectionFromDb("SELECT power_key, power_cooldown cooldown FROM player_power WHERE player_id = $playerId");
+        $powers = $this->getCollectionFromDb("SELECT power_key, power_cooldown cooldown, power_plays_remaining plays_remaining FROM player_power WHERE player_id = $playerId");
         foreach ($powers as $power) {
             $powerKey = (string) ($power['power_key'] ?? '');
-            if ($powerKey !== '' && isset($this->bonus_cards[$powerKey]) && $this->isFreePowerAvailable($powerKey, (int) ($power['cooldown'] ?? 0), $playerId)) {
+            if ($powerKey !== '' && isset($this->bonus_cards[$powerKey]) && $this->isFreePowerAvailable($powerKey, (int) ($power['cooldown'] ?? 0), $playerId, (int) ($power['plays_remaining'] ?? 0))) {
                 return true;
             }
         }

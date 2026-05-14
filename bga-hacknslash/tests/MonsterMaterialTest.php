@@ -114,7 +114,7 @@ final class MonsterMaterialTest extends TestCase
         $orc = $monsters[7];
 
         $this->assertSame('Orc', $orc['name']);
-        $this->assertSame(4, $orc['health']);
+        $this->assertSame(6, $orc['health']);
         $this->assertSame('big', $orc['size']);
         $this->assertSame(1, $orc['move']);
         $this->assertSame('orthogonal', $orc['move_metric']);
@@ -130,7 +130,7 @@ final class MonsterMaterialTest extends TestCase
         $pigRider = $monsters[8];
 
         $this->assertSame('Pig Rider', $pigRider['name']);
-        $this->assertSame(4, $pigRider['health']);
+        $this->assertSame(5, $pigRider['health']);
         $this->assertSame('big', $pigRider['size']);
         $this->assertSame(1, $pigRider['move']);
         $this->assertSame('orthogonal', $pigRider['move_metric']);

@@ -193,6 +193,8 @@
 
 .hns_tile.hns_free_move_tile,
 .hns_tile.hns_power_target_tile,
+.hns_tile.hns_power_area_candidate_tile,
+.hns_tile.hns_power_area_preview_tile,
 .hns_tile.hns_monster_attack_tile {
   z-index: 3;
 }
@@ -206,7 +208,11 @@
   display: none;
 }
 
-.hns_tile_wall { border-color: var(--hns-border-wall); cursor: default; }
+.hns_tile_wall {
+  border-color: var(--hns-border-wall);
+  background-size: 100% 100%;
+  cursor: default;
+}
 
 .hns_tile.hns_selectable {
   outline: 3px solid var(--hns-gold-dim);
@@ -225,6 +231,18 @@
   outline-offset: -4px;
   box-shadow: 0 0 16px var(--hns-blue-glow);
   filter: brightness(1.18) saturate(1.25);
+}
+
+.hns_tile.hns_power_area_candidate_tile {
+  box-shadow: inset 0 0 14px rgba(99, 230, 255, 0.36);
+  filter: brightness(1.1) saturate(1.12);
+}
+
+.hns_tile.hns_power_area_preview_tile {
+  outline: 4px solid var(--hns-cyan);
+  outline-offset: -8px;
+  box-shadow: inset 0 0 18px var(--hns-cyan-glow), 0 0 16px rgba(99, 230, 255, 0.42);
+  filter: brightness(1.25) saturate(1.3);
 }
 
 .hns_tile.hns_monster_attack_tile {
@@ -300,6 +318,17 @@
   height: 46px;
   max-width: none;
   transform: translate(-6px, -6px);
+}
+
+.hns_entity_big {
+  width: 54px;
+  height: 54px;
+}
+
+.hns_entity_big img {
+  width: 54px;
+  height: 54px;
+  transform: translate(-10px, -10px);
 }
 
 .hns_entity_boss {
@@ -715,11 +744,60 @@
 
 /* ===== Power cards ===== */
 
+.hns_hand_header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.hns_hand_header h3 {
+  margin-bottom: 0;
+}
+
+.hns_card_zoom {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-width: 42px;
+  min-height: 28px;
+  border: 1px solid rgba(246, 200, 95, 0.45);
+  border-radius: var(--hns-radius-pill);
+  background: rgba(56, 41, 31, 0.92);
+  color: var(--hns-text-secondary);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+}
+
 #hns_cards {
   display: grid;
   grid-template-columns: repeat(2, minmax(96px, 1fr));
   gap: 8px;
   min-height: 120px;
+}
+
+#hns_cards.hns_cards_zoom_2 {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+#hns_cards.hns_cards_zoom_3 {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+#hns_cards.hns_cards_zoom_2 .hns_power_card,
+#hns_cards.hns_cards_zoom_3 .hns_power_card {
+  max-width: 178px;
+  justify-self: center;
+}
+
+#hns_cards.hns_cards_zoom_3 .hns_power_card {
+  max-width: 220px;
 }
 
 .hns_power_card {
@@ -769,22 +847,6 @@
 .hns_power_card img {
   display: block;
   width: 100%;
-}
-
-.hns_power_card_name {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 5px 6px 6px;
-  background: linear-gradient(180deg, transparent 0%, rgba(18, 13, 10, 0.82) 28%, rgba(18, 13, 10, 0.96) 100%);
-  color: var(--hns-text-bright);
-  font-size: 11px;
-  font-weight: 800;
-  line-height: 1.05;
-  text-align: center;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95);
-  pointer-events: none;
 }
 
 .hns_power_card_badges {
@@ -967,14 +1029,87 @@
     min-height: 280px;
   }
 
+  #hns_monster_cards {
+    grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+    gap: 7px;
+  }
+
   #hns_cards {
-    grid-template-columns: repeat(2, minmax(76px, 1fr));
+    grid-template-columns: repeat(3, minmax(72px, 1fr));
+    gap: 6px;
+    min-height: 96px;
+  }
+
+  #hns_cards.hns_cards_zoom_2 {
+    grid-template-columns: repeat(2, minmax(86px, 1fr));
+  }
+
+  #hns_cards.hns_cards_zoom_3 {
+    grid-template-columns: 1fr;
+  }
+
+  #hns_cards.hns_cards_zoom_2 .hns_power_card {
+    max-width: none;
+  }
+
+  #hns_cards.hns_cards_zoom_3 .hns_power_card {
+    max-width: 210px;
+  }
+
+  .hns_monster_card_footer {
+    gap: 5px;
+    padding: 4px 5px;
+    font-size: 10px;
+  }
+
+  .hns_monster_card_footer span,
+  .hns_power_badge,
+  .hns_effect_badge {
+    min-width: 20px;
+    min-height: 17px;
+    padding: 0 4px;
+    font-size: 9px;
+  }
+
+  .hns_monster_card_losses {
+    top: 5px;
+    left: 5px;
+    min-width: 22px;
+    padding: 2px 5px;
+    font-size: 10px;
+  }
+
+  .hns_monster_card_effects {
+    top: 4px;
+    left: 4px;
+    gap: 3px;
+  }
+
+  .hns_effect_icon {
+    width: 22px;
+    height: 22px;
+  }
+
+  .hns_power_card_badges {
+    top: 5px;
+    right: 5px;
+    gap: 3px;
+  }
+
+  .hns_power_cooldown_overlay {
+    font-size: 44px;
   }
 
   .hns_entity_monster,
   .hns_entity_monster img {
     width: 36px;
     height: 36px;
+  }
+
+  .hns_entity_big,
+  .hns_entity_big img {
+    width: 42px;
+    height: 42px;
   }
 
   .hns_entity_boss,

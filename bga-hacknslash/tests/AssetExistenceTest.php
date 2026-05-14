@@ -140,6 +140,7 @@ final class AssetExistenceTest extends TestCase
             'tiles/monsters/pig-rider-pixel.webp',
             'tiles/monsters/wolf-rider-pixel.webp',
             'tiles/monsters/slasher-pixel.webp',
+            'tiles/monsters/striker-pixel.webp',
         ];
 
         foreach ($required as $relative) {
@@ -155,15 +156,17 @@ final class AssetExistenceTest extends TestCase
         }
     }
 
-    public function testSlasherBossCardAssetsAreReferenced(): void
+    public function testBossCardAssetsAreReferenced(): void
     {
         $root = dirname(__DIR__);
         $js = self::readFile($root . '/hacknslash.js');
 
-        foreach (['slasher-1.webp', 'slasher-2.webp', 'slasher-3.webp'] as $file) {
-            $relative = 'cards/monsters/' . $file;
-            $this->assertStringContainsString($relative, $js);
-            $this->assertFileExists($root . '/img/' . $relative);
+        foreach (['slasher', 'striker'] as $bossKey) {
+            foreach ([1, 2, 3] as $phase) {
+                $relative = 'cards/monsters/' . $bossKey . '-' . $phase . '.webp';
+                $this->assertStringContainsString($relative, $js);
+                $this->assertFileExists($root . '/img/' . $relative);
+            }
         }
     }
 
@@ -199,13 +202,12 @@ final class AssetExistenceTest extends TestCase
 
         foreach (['hero-1', 'hero-2'] as $heroKey) {
             $this->assertStringContainsString($heroKey, $js);
-            $this->assertFileExists($root . '/img/tiles/heroes/' . $heroKey . '.webp');
-            $this->assertFileExists($root . '/img/cards/heroes/' . $heroKey . '.webp');
+            $this->assertFileExists($root . '/img/tiles/' . $heroKey . '-pixel.webp');
         }
 
         $this->assertStringContainsString('getHeroVisualKey', $js);
-        $this->assertStringContainsString("tiles/heroes/' + heroKey + '.webp", $js);
-        $this->assertStringContainsString("cards/heroes/' + this.getHeroVisualKey(playerId) + '.webp", $js);
+        $this->assertStringContainsString("tiles/' + heroKey + '-pixel.webp", $js);
+        $this->assertStringContainsString("tiles/' + this.getHeroVisualKey(playerId) + '-pixel.webp", $js);
         $this->assertStringContainsString('hns_hero_portrait', $js);
         $this->assertStringContainsString('.hns_entity_hero img {', $css);
         $this->assertStringContainsString('.hns_hero_portrait {', $css);

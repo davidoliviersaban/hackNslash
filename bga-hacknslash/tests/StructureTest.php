@@ -137,6 +137,26 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('nextStateAfterHeroAction($playerId)', $game);
     }
 
+    public function testMultiPlayPowerKeepsPlayerActiveWhilePlaysRemain(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+        $freeActionAvailable = substr($game, strpos($game, 'private function isPlayerFreeActionAvailable'), strpos($game, '/** @return list<string> */') - strpos($game, 'private function isPlayerFreeActionAvailable'));
+
+        $this->assertStringContainsString('power_plays_remaining plays_remaining', $freeActionAvailable);
+        $this->assertStringContainsString('(int) ($power[\'plays_remaining\'] ?? 0)', $freeActionAvailable);
+        $this->assertStringContainsString('$this->isFreePowerAvailable($powerKey, (int) ($power[\'cooldown\'] ?? 0), $playerId, (int) ($power[\'plays_remaining\'] ?? 0))', $freeActionAvailable);
+    }
+
+    public function testPlayersWithOnlyFreeActionsStayActiveInSimultaneousTurn(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+        $playersWithAvailableActions = substr($game, strpos($game, 'private function playersWithAvailableActions'), strpos($game, 'private function playersWithPendingRewards') - strpos($game, 'private function playersWithAvailableActions'));
+
+        $this->assertStringContainsString('player_free_move_available = 1 OR player_main_action_available = 1', $playersWithAvailableActions);
+        $this->assertStringContainsString('$this->isPlayerFreeActionAvailable($playerId)', $playersWithAvailableActions);
+        $this->assertStringContainsString('$players[$playerId] = [\'id\' => $playerId];', $playersWithAvailableActions);
+    }
+
     public function testSetupActivatesAllPlayersForInitialSimultaneousTurn(): void
     {
         $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
@@ -330,6 +350,17 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('hns_power_target_tile', $js);
         $this->assertStringContainsString('target_entity_ids', $js);
         $this->assertStringContainsString('entitiesAdjacentToTile', $js);
+        $this->assertStringContainsString('entitiesInPowerArea', $js);
+        $this->assertStringContainsString('tilesInPowerArea', $js);
+        $this->assertStringContainsString('highlightPotentialPowerArea', $js);
+        $this->assertStringContainsString('previewPowerArea', $js);
+        $this->assertStringContainsString('isAreaPreviewPower', $js);
+        $this->assertStringContainsString('clearPowerAreaPreview', $js);
+        $this->assertStringContainsString('onTileMouseEnter', $js);
+        $this->assertStringContainsString('onEntityMouseEnter', $js);
+        $this->assertStringContainsString('onPowerAreaMouseLeave', $js);
+        $this->assertStringContainsString('hns_power_area_candidate_tile', $js);
+        $this->assertStringContainsString('hns_power_area_preview_tile', $js);
         $this->assertStringContainsString('selectedPowerTileId', $js);
         $this->assertStringContainsString('selectedPowerTargetEntityIds', $js);
         $this->assertStringContainsString('togglePullTarget', $js);
@@ -349,12 +380,14 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('payload.target_entity_id = targetEntityId', $js);
         $this->assertStringContainsString('GameRules.isWalkableTile(tile) && !GameRules.isTileOccupied(tile.id, entities)', $js);
         $this->assertStringContainsString("['floor', 'spikes'].indexOf(tile.type) !== -1", $js);
-        $this->assertStringContainsString('GameRules.entitiesAdjacentToTile(', $js);
+        $this->assertStringContainsString('GameRules.entitiesInPowerArea(', $js);
         $this->assertStringContainsString("join(' ')", $js);
         $this->assertStringContainsString("this.selectedPowerTileId = String(entity.tile_id)", $js);
         $this->assertStringContainsString("preg_split('/\\s+/'", $actions);
         $this->assertStringContainsString('.hns_tile.hns_power_target_tile', $css);
         $this->assertStringNotContainsString('.hns_tile.hns_power_target_tile::after', $css);
+        $this->assertStringContainsString('.hns_tile.hns_power_area_candidate_tile', $css);
+        $this->assertStringContainsString('.hns_tile.hns_power_area_preview_tile', $css);
         $this->assertStringContainsString('.hns_target_count', $css);
         $this->assertStringContainsString('z-index: 3', $css);
         $this->assertStringContainsString('.hns_power_confirm', $css);
@@ -571,8 +604,11 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('removePowerFromDeck($chosenPowerKey)', $game);
         $this->assertStringContainsString('$this->cards->moveCard($cardId, \'discard\')', $game);
         $this->assertStringContainsString('hns_reward_panel', $js);
-        $this->assertStringContainsString('hns_power_card_name', $js);
-        $this->assertStringContainsString('.hns_power_card_name', $css);
+        $this->assertStringNotContainsString('hns_power_card_name', $js);
+        $this->assertStringNotContainsString('.hns_power_card_name', $css);
+        $this->assertStringContainsString('hns_card_zoom', $js);
+        $this->assertStringContainsString('updatePowerCardZoom', $js);
+        $this->assertStringContainsString('hns_cards_zoom_3', $css);
         $this->assertStringContainsString('updateRewardFocusState', $js);
         $this->assertStringContainsString('hns_reward_focus', $js);
         $this->assertStringContainsString('hns_panel_folded', $css);
@@ -612,12 +648,17 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('tileBox', $js);
         $this->assertStringContainsString('boardAxisOffset', $js);
         $this->assertStringContainsString('tileBounds', $js);
+        $this->assertStringContainsString("if (x === 0 && y === 0) { return 'tiles/levels/wall-top-left.webp'; }", $js);
+        $this->assertStringContainsString("if (x === bounds.maxX && y === 0) { return 'tiles/levels/wall-top-right.webp'; }", $js);
+        $this->assertStringContainsString("if (x === 0 && y === bounds.maxY) { return 'tiles/levels/wall-bottom-left.webp'; }", $js);
+        $this->assertStringContainsString("if (x === bounds.maxX && y === bounds.maxY) { return 'tiles/levels/wall-bottom-right.webp'; }", $js);
         $this->assertStringContainsString('width:${width}px; height:${height}px;', $js);
         $this->assertStringContainsString("width: boardAxisOffset(bounds.maxX + 1, bounds.maxX) + 'px'", $js);
         $this->assertStringContainsString("height: boardAxisOffset(bounds.maxY + 1, bounds.maxY) + 'px'", $js);
         $this->assertStringContainsString('overflow: visible;', $css);
         $this->assertStringContainsString('width: 70px;', $css);
         $this->assertStringContainsString('height: 70px;', $css);
+        $this->assertStringContainsString('background-size: 100% 100%;', $css);
     }
 
     public function testOptionalActionsCanBeSkippedIndependently(): void
@@ -720,6 +761,18 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('rgba(128, 76, 36', $css);
         $this->assertStringContainsString('isActivePlayerMoveAvailable', $game);
         $this->assertStringContainsString('parseInt(player.action_points || 0, 10) > 0', $js);
+        $this->assertStringContainsString("var actionPoints = (player.action_points || 0) + '/' + maxActionPoints;", $js);
+        $this->assertStringNotContainsString("compact ? '-'", $js);
+    }
+
+    public function testAssetSyncExcludesNonBgaImageFolders(): void
+    {
+        $script = self::readFile(dirname(__DIR__, 2) . '/scripts/prepare-bga-assets.sh');
+
+        $this->assertStringContainsString("--exclude 'illustrations/***'", $script);
+        $this->assertStringContainsString("--exclude 'cards/placeholders/***'", $script);
+        $this->assertStringContainsString("--exclude 'tiles/actions/***'", $script);
+        $this->assertStringContainsString("--exclude 'tiles/free/***'", $script);
     }
 
     public function testEngineResolutionErrorsAreUserFacing(): void

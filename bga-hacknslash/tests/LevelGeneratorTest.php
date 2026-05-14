@@ -69,6 +69,44 @@ final class LevelGeneratorTest extends TestCase
         }
     }
 
+    public function testGeneratedLevelsAreFullyReachableWithOrthogonalMovement(): void
+    {
+        foreach ([5, 7] as $size) {
+            foreach ([1, 2, 3, 42, 99, 1234, 20260510] as $seed) {
+                $level = HNS_LevelGenerator::generate($size, $seed);
+                $terrain = $this->terrainByCoordinate($level);
+                $reachable = $this->orthogonallyReachableWalkableCells($level, $level['player_starts'][0]);
+
+                foreach ($terrain as $key => $type) {
+                    if (!in_array($type, ['floor', 'spikes'], true)) {
+                        continue;
+                    }
+                    $this->assertArrayHasKey($key, $reachable, "Walkable cell $key should be reachable orthogonally for size $size seed $seed.");
+                }
+            }
+        }
+    }
+
+    public function testExitInteriorAnchorIsReachableWithOrthogonalMovement(): void
+    {
+        foreach ([5, 7] as $size) {
+            foreach ([1, 42, 1234, 20260510] as $seed) {
+                $level = HNS_LevelGenerator::generate($size, $seed);
+                $exit = $level['exit'];
+                $exitAnchor = [
+                    'x' => $exit['x'],
+                    'y' => $exit['y'] === 0 ? 1 : $level['grid_size'] - 2,
+                ];
+                $terrain = $this->terrainByCoordinate($level);
+                $reachable = $this->orthogonallyReachableWalkableCells($level, $level['player_starts'][0]);
+                $key = $exitAnchor['x'] . ',' . $exitAnchor['y'];
+
+                $this->assertContains($terrain[$key] ?? null, ['floor', 'spikes']);
+                $this->assertArrayHasKey($key, $reachable, "Exit anchor $key should be reachable orthogonally for size $size seed $seed.");
+            }
+        }
+    }
+
     public function testRejectsUnsupportedLevelSize(): void
     {
         $this->expectException(InvalidArgumentException::class);
@@ -95,5 +133,43 @@ final class LevelGeneratorTest extends TestCase
         }
 
         $this->assertSame(($center * 100) + $center + 1, $state['entities'][900]['tile_id']);
+    }
+
+    /** @param array<string, mixed> $level */
+    private function terrainByCoordinate(array $level): array
+    {
+        $terrain = [];
+        foreach ($level['terrain'] as $cell) {
+            $terrain[$cell['x'] . ',' . $cell['y']] = $cell['terrain'];
+        }
+
+        return $terrain;
+    }
+
+    /**
+     * @param array<string, mixed> $level
+     * @param array{x:int, y:int} $start
+     * @return array<string, true>
+     */
+    private function orthogonallyReachableWalkableCells(array $level, array $start): array
+    {
+        $terrain = $this->terrainByCoordinate($level);
+        $queue = [$start];
+        $visited = [$start['x'] . ',' . $start['y'] => true];
+
+        while ($queue !== []) {
+            $cell = array_shift($queue);
+            foreach ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [$dx, $dy]) {
+                $neighbor = ['x' => $cell['x'] + $dx, 'y' => $cell['y'] + $dy];
+                $key = $neighbor['x'] . ',' . $neighbor['y'];
+                if (isset($visited[$key]) || !in_array($terrain[$key] ?? null, ['floor', 'spikes'], true)) {
+                    continue;
+                }
+                $visited[$key] = true;
+                $queue[] = $neighbor;
+            }
+        }
+
+        return $visited;
     }
 }

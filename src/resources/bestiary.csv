@@ -5,6 +5,6 @@ Level,Name,Description,Size,Dash,Attack,Health,Damage,Range,Nb
 1,Kamikaze,Explose au contact orthogonal d'un heros ou quand il meurt.,petit,1 diagonale,explosion,1,2,1 orthogonal,1
 1,Wizard,Attaque orthogonalement a distance et ne touche pas une cible sur sa propre case.,petit,1 orthogonal,sort,2,1,1-4 orthogonal,1
 1,Bomber,Attaque orthogonalement a moyenne distance et ne peut pas tirer au contact.,petit,1 orthogonal,bombe,3,1,2-3 orthogonal,1
-1,Orc,Frappe les 3 cases devant lui. Case frontale orthogonale et 2 diagonales adjacentes.,gros,1 orthogonal,frappe frontale,4,2,1 arc frontal,1
-1,Pig Rider,Charge le heros. Prend sa case et le pousse d'une case. Collision si la poussee est impossible.,gros,1 orthogonal,charge,4,1,1 orthogonal,1
+1,Orc,Frappe les 3 cases devant lui. Case frontale orthogonale et 2 diagonales adjacentes.,gros,1 orthogonal,frappe frontale,6,2,1 arc frontal,1
+1,Pig Rider,Charge le heros. Prend sa case et le pousse d'une case. Collision si la poussee est impossible.,gros,1 orthogonal,charge,5,1,1 orthogonal,1
 1,Wolf Rider,Invoque 1 gobelin sur une case orthogonale adjacente puis fuit d'une case loin du heros.,gros,1 orthogonal puis fuite,generateur,3,0,0,1

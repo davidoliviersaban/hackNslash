@@ -44,17 +44,18 @@ final class HNS_LevelGenerator
         }
 
         $entry = $rng->pick(self::entryCells($gridSize));
-        $exit = $rng->pick(array_values(array_filter(self::borderCells($gridSize), static fn (array $cell): bool => $cell['y'] === ($entry['y'] === 0 ? $gridSize - 1 : 0))));
+        $exit = $rng->pick(array_values(array_filter(self::borderCells($gridSize), static fn(array $cell): bool => $cell['y'] === ($entry['y'] === 0 ? $gridSize - 1 : 0))));
         $grid[$entry['y']][$entry['x']] = self::TERRAIN_ENTRY;
         $grid[$exit['y']][$exit['x']] = self::TERRAIN_EXIT;
 
-        $anchor = self::entranceAnchor($entry, $gridSize);
+        $anchor = self::borderInnerAnchor($entry, $gridSize);
+        $exitAnchor = self::borderInnerAnchor($exit, $gridSize);
         $playerStarts = [['x' => $anchor['x'] - 1, 'y' => $anchor['y']], ['x' => $anchor['x'] + 1, 'y' => $anchor['y']]];
         if (!self::insidePlayableArea($playerStarts[0], $gridSize) || !self::insidePlayableArea($playerStarts[1], $gridSize)) {
             return null;
         }
 
-        $reserved = [$entry, $exit, $anchor, ...$playerStarts];
+        $reserved = [$entry, $exit, $anchor, $exitAnchor, ...$playerStarts];
         foreach ([[self::TERRAIN_WALL, $counts['walls']], [self::TERRAIN_PILLAR, $counts['pillars']], [self::TERRAIN_HOLE, $counts['holes']]] as [$terrain, $count]) {
             if (!self::placeBlockingTerrain($grid, $terrain, $count, $reserved, $rng)) {
                 return null;
@@ -68,7 +69,7 @@ final class HNS_LevelGenerator
         $reachable = array_values(array_filter(self::reachableCells($grid, $anchor), static function (array $cell) use ($grid): bool {
             return in_array($grid[$cell['y']][$cell['x']], [self::TERRAIN_FLOOR, self::TERRAIN_SPIKES], true);
         }));
-        $monsterCandidates = array_values(array_filter($reachable, static fn (array $cell): bool => !self::containsCell($reserved, $cell)));
+        $monsterCandidates = array_values(array_filter($reachable, static fn(array $cell): bool => !self::containsCell($reserved, $cell)));
         if (count($monsterCandidates) < $counts['monsters']) {
             return null;
         }
@@ -122,7 +123,7 @@ final class HNS_LevelGenerator
     /** @param array<int, array<int, string>> $grid */
     private static function placeSpikes(array &$grid, int $count, array $reserved, HNS_SeededRandom $rng): bool
     {
-        $candidates = array_values(array_filter(self::candidateCells(count($grid), $reserved), static fn (array $cell): bool => $grid[$cell['y']][$cell['x']] === self::TERRAIN_FLOOR));
+        $candidates = array_values(array_filter(self::candidateCells(count($grid), $reserved), static fn(array $cell): bool => $grid[$cell['y']][$cell['x']] === self::TERRAIN_FLOOR));
         $spikes = array_slice($rng->shuffle($candidates), 0, $count);
         if (count($spikes) < $count) {
             return false;
@@ -142,6 +143,12 @@ final class HNS_LevelGenerator
 
         foreach (array_slice($reserved, 2) as $cell) {
             if (!self::containsCell($reachable, $cell)) {
+                return false;
+            }
+        }
+
+        foreach (self::innerCells(count($grid)) as $cell) {
+            if (self::walkable($grid, $cell) && !self::containsCell($reachable, $cell)) {
                 return false;
             }
         }
@@ -189,9 +196,9 @@ final class HNS_LevelGenerator
         return false;
     }
 
-    private static function entranceAnchor(array $entry, int $gridSize): array
+    private static function borderInnerAnchor(array $entryOrExit, int $gridSize): array
     {
-        return ['x' => $entry['x'], 'y' => $entry['y'] === 0 ? 1 : $gridSize - 2];
+        return ['x' => $entryOrExit['x'], 'y' => $entryOrExit['y'] === 0 ? 1 : $gridSize - 2];
     }
 
     private static function insidePlayableArea(array $cell, int $gridSize): bool
@@ -217,22 +224,22 @@ final class HNS_LevelGenerator
 
     private static function candidateCells(int $gridSize, array $reserved): array
     {
-        return array_values(array_filter(self::innerCells($gridSize), static fn (array $cell): bool => !self::containsCell($reserved, $cell)));
+        return array_values(array_filter(self::innerCells($gridSize), static fn(array $cell): bool => !self::containsCell($reserved, $cell)));
     }
 
     private static function entryCells(int $gridSize): array
     {
-        return array_values(array_filter(self::borderCells($gridSize), static fn (array $cell): bool => ($cell['y'] === 0 || $cell['y'] === $gridSize - 1) && $cell['x'] >= 2 && $cell['x'] <= $gridSize - 3));
+        return array_values(array_filter(self::borderCells($gridSize), static fn(array $cell): bool => ($cell['y'] === 0 || $cell['y'] === $gridSize - 1) && $cell['x'] >= 2 && $cell['x'] <= $gridSize - 3));
     }
 
     private static function borderCells(int $gridSize): array
     {
-        return array_values(array_filter(self::allCells($gridSize), static fn (array $cell): bool => $cell['x'] === 0 || $cell['y'] === 0 || $cell['x'] === $gridSize - 1 || $cell['y'] === $gridSize - 1));
+        return array_values(array_filter(self::allCells($gridSize), static fn(array $cell): bool => $cell['x'] === 0 || $cell['y'] === 0 || $cell['x'] === $gridSize - 1 || $cell['y'] === $gridSize - 1));
     }
 
     private static function innerCells(int $gridSize): array
     {
-        return array_values(array_filter(self::allCells($gridSize), static fn (array $cell): bool => $cell['x'] > 0 && $cell['y'] > 0 && $cell['x'] < $gridSize - 1 && $cell['y'] < $gridSize - 1));
+        return array_values(array_filter(self::allCells($gridSize), static fn(array $cell): bool => $cell['x'] > 0 && $cell['y'] > 0 && $cell['x'] < $gridSize - 1 && $cell['y'] < $gridSize - 1));
     }
 
     private static function allCells(int $gridSize): array

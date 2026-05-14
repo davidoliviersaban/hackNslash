@@ -357,6 +357,20 @@ final class RoundEngineTest extends TestCase
         $this->assertSame([['type' => 'trapDamage', 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1]], $result['events']);
     }
 
+    public function testTrapStepBreaksMonsterShieldBeforeDamaging(): void
+    {
+        $state = [
+            'tiles' => [1 => ['id' => 1, 'type' => 'spikes']],
+            'entities' => [20 => ['id' => 20, 'type' => 'monster', 'tile_id' => 1, 'health' => 2, 'state' => 'active', 'has_shield' => true, 'shield_broken' => false]],
+        ];
+
+        $result = HNS_RoundEngine::activateTraps($state);
+
+        $this->assertSame(2, $result['state']['entities'][20]['health']);
+        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame([['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 1]], $result['events']);
+    }
+
     public function testTrapStepCanKillMonstersOnSpikes(): void
     {
         $state = [

@@ -63,16 +63,49 @@ final class BoardRulesTest extends TestCase
     public function testMonsterTileCanContainUpToTwoSmallMonsters(): void
     {
         $entities = [
-            20 => ['id' => 20, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
-            21 => ['id' => 21, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+            20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
         ];
 
         $this->assertTrue(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
 
-        $entities[22] = ['id' => 22, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'];
-        $entities[23] = ['id' => 23, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 4, 'state' => 'active'];
+        $entities[22] = ['id' => 22, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'];
+        $entities[23] = ['id' => 23, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 4, 'state' => 'active'];
 
         $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[23], 23));
+    }
+
+    public function testOnlyGoblinsCanShareTile(): void
+    {
+        $entities = [
+            20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 2, 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+        ];
+
+        $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
+    }
+
+    public function testNonGoblinMonstersCannotShareTileEvenWhenIdentical(): void
+    {
+        $entities = [
+            20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 2, 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 2, 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+            22 => ['id' => 22, 'type' => 'monster', 'type_arg' => 3, 'monster_size' => 'small', 'tile_id' => 4, 'state' => 'active'],
+            23 => ['id' => 23, 'type' => 'monster', 'type_arg' => 3, 'monster_size' => 'small', 'tile_id' => 5, 'state' => 'active'],
+        ];
+
+        $this->assertFalse(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
+        $this->assertFalse(HNS_BoardRules::canEnterTile(4, $entities, $entities[23], 23));
+    }
+
+    public function testDatabaseStringMonsterIdsCanShareWhenIdentical(): void
+    {
+        $entities = [
+            20 => ['id' => 20, 'type' => 'monster', 'type_arg' => '1', 'monster_size' => 'small', 'tile_id' => 2, 'state' => 'active'],
+            21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 3, 'state' => 'active'],
+        ];
+
+        $this->assertTrue(HNS_BoardRules::canEnterTile(2, $entities, $entities[21], 21));
     }
 
     public function testBigMonstersCannotShareWithAnyOtherMonster(): void

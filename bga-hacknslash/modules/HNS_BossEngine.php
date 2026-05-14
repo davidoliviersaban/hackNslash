@@ -175,14 +175,12 @@ final class HNS_BossEngine
         $rng = new HNS_SeededRandom($seed);
 
         for ($index = 0; $index < $count; $index++) {
-            $tile = self::firstAvailableAdjacentTile($bossEntityId, $state);
+            [$monsterId, $material, $tile] = self::pickSpawnableMinion($bossEntityId, $state, $monsterIds, $rng);
             if ($tile === null) {
                 break;
             }
 
-            $monsterId = (int) $rng->pick($monsterIds);
-            $entityId = HNS_GameEngine::nextEntityId($state['entities']);
-            $material = $state['monster_material'][$monsterId] ?? [];
+            $entityId = self::nextEntityId($state['entities']);
             $state['entities'][$entityId] = [
                 'id' => $entityId,
                 'type' => 'monster',
@@ -207,8 +205,29 @@ final class HNS_BossEngine
         return $state;
     }
 
+    /**
+     * @param array<string, mixed> $state
+     * @param array<int, int> $monsterIds
+     * @return array{0:int, 1:array<string, mixed>, 2:array<string, mixed>|null}
+     */
+    private static function pickSpawnableMinion(int $bossEntityId, array $state, array $monsterIds, HNS_SeededRandom $rng): array
+    {
+        $preferredMonsterId = (int) $rng->pick($monsterIds);
+        $candidateMonsterIds = array_values(array_unique([$preferredMonsterId, ...array_map('intval', $monsterIds)]));
+
+        foreach ($candidateMonsterIds as $monsterId) {
+            $material = $state['monster_material'][$monsterId] ?? [];
+            $tile = self::firstAvailableAdjacentTile($bossEntityId, $state, $monsterId, $material['size'] ?? 'small');
+            if ($tile !== null) {
+                return [$monsterId, $material, $tile];
+            }
+        }
+
+        return [$preferredMonsterId, $state['monster_material'][$preferredMonsterId] ?? [], null];
+    }
+
     /** @param array<string, mixed> $state */
-    private static function firstAvailableAdjacentTile(int $bossEntityId, array $state): ?array
+    private static function firstAvailableAdjacentTile(int $bossEntityId, array $state, int $monsterId, string $monsterSize): ?array
     {
         $bossTile = $state['tiles'][(int) $state['entities'][$bossEntityId]['tile_id']];
         foreach ($state['tiles'] as $tile) {
@@ -216,13 +235,19 @@ final class HNS_BossEngine
                 continue;
             }
 
-            $summon = ['id' => 0, 'type' => 'monster', 'monster_size' => 'small', 'state' => 'active'];
+            $summon = ['id' => 0, 'type' => 'monster', 'type_arg' => $monsterId, 'monster_size' => $monsterSize, 'tile_id' => (int) ($state['entities'][$bossEntityId]['tile_id'] ?? 0), 'state' => 'active'];
             if (HNS_BoardRules::canEnterTile((int) $tile['id'], $state['entities'], $summon, 0)) {
                 return $tile;
             }
         }
 
         return null;
+    }
+
+    /** @param array<int, array<string, mixed>> $entities */
+    private static function nextEntityId(array $entities): int
+    {
+        return empty($entities) ? 1 : max(array_map('intval', array_keys($entities))) + 1;
     }
 
     /** @param array<int, array<string, mixed>> $entities */

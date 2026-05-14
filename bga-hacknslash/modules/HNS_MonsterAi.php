@@ -149,7 +149,7 @@ final class HNS_MonsterAi
      */
     private static function summonThenFlee(int $monsterEntityId, int $heroEntityId, array $state, array $monsterMaterial, array &$events): array
     {
-        $summonTile = self::bestAdjacentSummonTile($monsterEntityId, $state);
+        $summonTile = self::bestAdjacentSummonTile($monsterEntityId, $state, (int) ($monsterMaterial['summon_monster_id'] ?? 0));
         if ($summonTile !== null) {
             $summonedEntityId = HNS_GameEngine::nextEntityId($state['entities']);
             $summonedEntity = [
@@ -175,7 +175,7 @@ final class HNS_MonsterAi
     }
 
     /** @param array<string, mixed> $state */
-    private static function bestAdjacentSummonTile(int $monsterEntityId, array $state): ?array
+    private static function bestAdjacentSummonTile(int $monsterEntityId, array $state, int $summonMonsterId): ?array
     {
         $monsterTile = HNS_BoardRules::entityTile($state, $monsterEntityId);
         foreach ($state['tiles'] as $tile) {
@@ -183,7 +183,7 @@ final class HNS_MonsterAi
                 continue;
             }
 
-            $summon = ['id' => 0, 'type' => 'monster', 'monster_size' => 'small', 'state' => 'active'];
+            $summon = ['id' => 0, 'type' => 'monster', 'type_arg' => $summonMonsterId, 'monster_size' => 'small', 'state' => 'active'];
             if (HNS_BoardRules::canEnterTile((int) $tile['id'], $state['entities'], $summon, 0)) {
                 return $tile;
             }

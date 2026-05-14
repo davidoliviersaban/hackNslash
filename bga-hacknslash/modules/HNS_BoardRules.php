@@ -186,6 +186,11 @@ final class HNS_BoardRules
         }
 
         $movingSize = $movingEntity['monster_size'] ?? 'small';
+        $movingTypeArg = (int) ($movingEntity['type_arg'] ?? 0);
+        if ($movingTypeArg !== 1) {
+            return false;
+        }
+
         $smallMonsters = 0;
         $hasBigMonster = false;
 
@@ -200,6 +205,10 @@ final class HNS_BoardRules
 
             if ((int) ($entity['tile_id'] ?? 0) !== $tileId || ($entity['type'] ?? null) !== 'monster') {
                 continue;
+            }
+
+            if ((int) ($entity['type_arg'] ?? 0) !== $movingTypeArg) {
+                return false;
             }
 
             if (($entity['monster_size'] ?? 'small') === 'big') {
