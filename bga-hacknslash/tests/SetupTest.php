@@ -22,20 +22,31 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('INSERT INTO player_power (player_id, power_slot, power_key, power_cooldown, power_plays_remaining)', $setupSource);
     }
 
-    public function testBossFightDifficultyStartsAtBossWithBoostedHeroes(): void
+    public function testScenarioAndDifficultyOptionsConfigureStartLevelAndHealth(): void
     {
         $options = self::readFile(dirname(__DIR__) . '/gameoptions.json');
         $constants = self::readFile(dirname(__DIR__) . '/modules/material/constants.inc.php');
         $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
         $gameSource = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
 
+        $this->assertStringContainsString('"1": { "name": "Dungeon" }', $options);
         $this->assertStringContainsString('"2": { "name": "Boss fight" }', $options);
-        $this->assertStringContainsString('const HNS_DIFFICULTY_BOSS_FIGHT = 2;', $constants);
-        $this->assertStringContainsString('const HNS_BOSS_FIGHT_HEALTH = 100;', $constants);
+        $this->assertStringContainsString('"1": { "name": "Easy" }', $options);
+        $this->assertStringContainsString('"2": { "name": "Normal" }', $options);
+        $this->assertStringContainsString('"3": { "name": "Hard" }', $options);
+        $this->assertStringContainsString('"4": { "name": "Hardcore" }', $options);
+        $this->assertStringContainsString('const HNS_SCENARIO_BOSS_FIGHT = 2;', $constants);
+        $this->assertStringContainsString('const HNS_EASY_HEALTH = 20;', $constants);
+        $this->assertStringContainsString('const HNS_DEFAULT_HEALTH = 10;', $constants);
+        $this->assertStringContainsString('const HNS_HARD_HEALTH = 5;', $constants);
+        $this->assertStringContainsString('const HNS_HARDCORE_HEALTH = 1;', $constants);
         $this->assertStringContainsString('private const HNS_BOSS_FIGHT_POWER_COUNT = 2;', $setupSource);
         $this->assertStringContainsString('shuffle($powerKeys);', $setupSource);
-        $this->assertStringContainsString('$startLevel = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_LEVEL : HNS_FIRST_LEVEL;', $gameSource);
-        $this->assertStringContainsString('$startingHealth = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_FIGHT_HEALTH : HNS_DEFAULT_HEALTH;', $gameSource);
+        $this->assertStringContainsString('$startLevel = $scenario === HNS_SCENARIO_BOSS_FIGHT ? HNS_BOSS_LEVEL : $this->startingDungeonLevelForPlayerCount(count($players));', $gameSource);
+        $this->assertStringContainsString('startingDungeonLevelForPlayerCount', $gameSource);
+        $this->assertStringContainsString('return $playerCount >= 2 ? 3 : HNS_FIRST_LEVEL;', $gameSource);
+        $this->assertStringContainsString('$startingHealth = $this->startingHealthForDifficulty($difficulty);', $gameSource);
+        $this->assertStringContainsString('saveGameContext($scenario, $difficulty)', $gameSource);
     }
 
     public function testSetupUsesGeneratedLevelAndPersistsMonsterAbilities(): void
@@ -55,7 +66,8 @@ final class SetupTest extends TestCase
 
         $this->assertStringContainsString('$type === \'boss\'', $setupSource);
         $this->assertStringContainsString("INSERT INTO entity (entity_type, entity_type_arg, entity_tile_id, entity_health, entity_monster_size, entity_boss_key, entity_phase", $setupSource);
-        $this->assertStringContainsString("HNS_BossEngine::initialBossEntity('slasher'", $gameEngineSource);
+        $this->assertStringContainsString('randomBossKey($bossMaterial', $gameEngineSource);
+        $this->assertStringContainsString('HNS_BossEngine::initialBossEntity($bossKey', $gameEngineSource);
         $this->assertStringContainsString("'layout' => \$layout", $gameEngineSource);
     }
 
@@ -161,7 +173,7 @@ final class SetupTest extends TestCase
         $this->assertSame([], $setup->drawLevelEnchantments(HNS_BOSS_LEVEL));
     }
 
-    public function testBossFightStartingPowersDrawsTwoRankThreePowers(): void
+    public function testBossFightStartingPowersIncludesStrikeAndTwoRankThreePowers(): void
     {
         require_once dirname(__DIR__) . '/modules/HNS_Setup.php';
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
@@ -181,9 +193,10 @@ final class SetupTest extends TestCase
 
         $powers = $setup->bossFightStartingPowers();
 
-        $this->assertCount(2, $powers);
-        $this->assertCount(2, array_unique($powers));
-        foreach ($powers as $powerKey) {
+        $this->assertCount(3, $powers);
+        $this->assertSame('strike', $powers[0]);
+        $this->assertCount(3, array_unique($powers));
+        foreach (array_slice($powers, 1) as $powerKey) {
             $this->assertArrayHasKey($powerKey, $bonus_cards);
             $this->assertSame(3, (int) $bonus_cards[$powerKey]['rank']);
         }

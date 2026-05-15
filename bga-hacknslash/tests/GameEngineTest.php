@@ -44,7 +44,7 @@ final class GameEngineTest extends TestCase
         }
     }
 
-    public function testBossLevelGeneratesRoomAndSlasherEntityWithoutMonsterSlots(): void
+    public function testBossLevelGeneratesRoomAndRandomBossEntityWithoutMonsterSlots(): void
     {
         $state = HNS_GameEngine::createLevel(8, 123, $this->monsters, array_keys($this->monsters), [], $this->bosses);
 
@@ -53,12 +53,28 @@ final class GameEngineTest extends TestCase
         $this->assertNotEmpty($state['layout']['terrain']);
         $this->assertNotEmpty($state['tiles']);
         $this->assertSame('boss', $state['entities'][900]['type']);
-        $this->assertSame('slasher', $state['entities'][900]['boss_key']);
+        $this->assertContains($state['entities'][900]['boss_key'], array_keys($this->bosses));
         $this->assertSame(1, $state['entities'][900]['phase']);
         $this->assertTrue(HNS_BoardRules::isTileWalkable($state['tiles'][$state['entities'][900]['tile_id']]));
         foreach ($state['entities'] as $entity) {
             $this->assertNotSame('monster', $entity['type']);
         }
+    }
+
+    public function testBossLevelSelectionUsesSeed(): void
+    {
+        $bossKeysBySeed = [];
+        foreach ([1, 2, 3, 4, 5, 6] as $seed) {
+            $state = HNS_GameEngine::createLevel(8, $seed, $this->monsters, array_keys($this->monsters), [], $this->bosses);
+            $bossKeysBySeed[] = $state['entities'][900]['boss_key'];
+        }
+
+        $this->assertSame(
+            HNS_GameEngine::createLevel(8, 1, $this->monsters, array_keys($this->monsters), [], $this->bosses)['entities'][900]['boss_key'],
+            HNS_GameEngine::createLevel(8, 1, $this->monsters, array_keys($this->monsters), [], $this->bosses)['entities'][900]['boss_key']
+        );
+        $this->assertContains('slasher', $bossKeysBySeed);
+        $this->assertContains('striker', $bossKeysBySeed);
     }
 
     public function testLevelsSixAndSevenCreateRoomsWithoutExceedingSmallOrLargeSlotCapacity(): void
@@ -227,6 +243,38 @@ final class GameEngineTest extends TestCase
             ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 2],
             ['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 8],
         ], $result['events']);
+    }
+
+    public function testBossShieldPreActionRunsBeforeMonstersAndRepairsDbShieldState(): void
+    {
+        $state = [
+            'bosses' => $this->bosses,
+            'monster_material' => $this->monsters,
+            'level_monster_abilities' => [],
+            'tiles' => [
+                1 => ['id' => 1, 'x' => 0, 'y' => 0, 'type' => 'floor'],
+                2 => ['id' => 2, 'x' => 1, 'y' => 0, 'type' => 'floor'],
+                3 => ['id' => 3, 'x' => 2, 'y' => 0, 'type' => 'floor'],
+                4 => ['id' => 4, 'x' => 3, 'y' => 0, 'type' => 'floor'],
+            ],
+            'entities' => [
+                10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 4, 'health' => 10, 'state' => 'active'],
+                20 => ['id' => 20, 'type' => 'monster', 'type_arg' => 1, 'monster_size' => 'small', 'tile_id' => 2, 'health' => 1, 'state' => 'active', 'has_shield' => '0', 'shield_broken' => '0'],
+                21 => ['id' => 21, 'type' => 'monster', 'type_arg' => 2, 'monster_size' => 'small', 'tile_id' => 3, 'health' => 2, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '1'],
+                30 => ['id' => 30, 'type' => 'boss', 'boss_key' => 'striker', 'phase' => 3, 'monster_size' => 'boss', 'tile_id' => 1, 'health' => 10, 'state' => 'active', 'has_shield' => '1', 'shield_broken' => '1'],
+            ],
+        ];
+
+        $result = HNS_GameEngine::activateMonsters($state, $this->monsters);
+
+        $this->assertSame('bossGrantShield', $result['events'][0]['type']);
+        $this->assertSame([20, 21, 30], $result['events'][0]['target_entity_ids']);
+        $this->assertSame(1, $result['state']['entities'][20]['has_shield']);
+        $this->assertSame(0, $result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][21]['has_shield']);
+        $this->assertSame(0, $result['state']['entities'][21]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][30]['has_shield']);
+        $this->assertSame(0, $result['state']['entities'][30]['shield_broken']);
     }
 
     public function testPrepareLevelRewardAddsOfferOnlyWhenCleared(): void

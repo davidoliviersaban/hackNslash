@@ -75,3 +75,41 @@ CREATE TABLE IF NOT EXISTS `global_var` (
     `var_value` TEXT,
     PRIMARY KEY (`var_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS `final_combo` (
+    `combo_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `scenario` VARCHAR(16) NOT NULL,
+    `difficulty` VARCHAR(16) NOT NULL,
+    `player_count` TINYINT UNSIGNED NOT NULL,
+    `boss_key` VARCHAR(32) DEFAULT NULL,
+    `outcome` VARCHAR(8) NOT NULL COMMENT 'win, loss',
+    `combo_key` VARCHAR(255) NOT NULL,
+    `combo_json` TEXT NOT NULL,
+    PRIMARY KEY (`combo_id`),
+    KEY `combo_context_outcome` (`scenario`, `difficulty`, `outcome`, `player_count`),
+    KEY `combo_boss_outcome` (`boss_key`, `outcome`),
+    KEY `combo_key_idx` (`combo_key`(191))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
+
+CREATE TABLE IF NOT EXISTS `power_history` (
+    `history_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `player_id` INT(10) UNSIGNED NOT NULL,
+    `scenario` VARCHAR(16) NOT NULL,
+    `difficulty` VARCHAR(16) NOT NULL,
+    `power_key` VARCHAR(32) NOT NULL,
+    `event_type` VARCHAR(8) NOT NULL COMMENT 'played, taken',
+    PRIMARY KEY (`history_id`),
+    KEY `power_history_event` (`scenario`, `difficulty`, `event_type`, `power_key`),
+    KEY `power_history_player` (`player_id`, `event_type`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;
+
+CREATE TABLE IF NOT EXISTS `win_streak` (
+    `streak_id` INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `scenario` VARCHAR(16) NOT NULL,
+    `difficulty` VARCHAR(16) NOT NULL,
+    `player_count` TINYINT UNSIGNED NOT NULL,
+    `current_streak` INT(10) UNSIGNED NOT NULL DEFAULT '0',
+    `best_streak` INT(10) UNSIGNED NOT NULL DEFAULT '0',
+    PRIMARY KEY (`streak_id`),
+    UNIQUE KEY `win_streak_context` (`scenario`, `difficulty`, `player_count`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1;

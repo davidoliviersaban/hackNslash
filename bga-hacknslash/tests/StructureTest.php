@@ -21,6 +21,7 @@ final class StructureTest extends TestCase
             'gameinfos.inc.php',
             'dbmodel.sql',
             'material.inc.php',
+            'stats.jsonc',
             'states.inc.php',
             'hacknslash.game.php',
             'hacknslash.action.php',
@@ -58,6 +59,86 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('$this->getPlayerNameById($playerId)', $game);
         $this->assertStringNotContainsString('private function getPlayerNameById', $game);
         $this->assertStringNotContainsString('fetchPlayerNameById', $game);
+    }
+
+    public function testPlayerStatsAreDeclaredAndUpdated(): void
+    {
+        $stats = self::readFile(dirname(__DIR__) . '/stats.jsonc');
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+
+        foreach (['powers_taken', 'powers_played', 'damage_taken', 'damage_dealt', 'monsters_killed', 'victories', 'defeats', 'turns_played'] as $statName) {
+            $this->assertStringContainsString('"' . $statName . '":', $stats);
+            $this->assertStringContainsString("'$statName'", $game);
+        }
+
+        foreach (['dungeon_victories', 'boss_fight_defeats', 'easy_victories', 'hardcore_defeats', 'solo_victories', 'duo_defeats', 'current_win_streak', 'best_win_streak'] as $statName) {
+            $this->assertStringContainsString('"' . $statName . '":', $stats);
+            $this->assertStringContainsString("'$statName'", $game);
+        }
+
+        foreach (['power_taken_fireball_1', 'power_taken_vortex_3', 'power_played_dash_attack_1', 'power_played_point_blank_3'] as $statName) {
+            $this->assertStringContainsString('"' . $statName . '":', $stats);
+        }
+        $this->assertStringNotContainsString('"power_taken_attack":', $stats);
+        $this->assertStringNotContainsString('"power_taken_strike":', $stats);
+        $this->assertStringContainsString('"power_played_attack":', $stats);
+        $this->assertStringContainsString('"power_played_strike":', $stats);
+        $this->assertStringContainsString("'power_taken_' . \$powerKey", $game);
+        $this->assertStringContainsString("'power_played_' . \$powerKey", $game);
+        $this->assertStringContainsString("'power_' . \$eventType . '_' . \$powerKey", $game);
+
+        $this->assertStringContainsString('initPlayerStats', $game);
+        $this->assertStringContainsString('playerStatNames', $game);
+        $this->assertStringContainsString('powerStatKeys', $game);
+        $this->assertStringContainsString('takablePowerStatKeys', $game);
+        $this->assertStringContainsString('recordHeroPowerStats', $game);
+        $this->assertStringContainsString('recordDamageTakenStats', $game);
+        $this->assertStringContainsString('recordCooperativeDefeat', $game);
+        $this->assertStringContainsString('safeInitPlayerStat', $game);
+        $this->assertStringContainsString('safeIncPlayerStat', $game);
+        $this->assertStringContainsString('safeSetPlayerStat', $game);
+        $this->assertStringContainsString('recordContextualOutcomeStats', $game);
+        $this->assertStringContainsString('Unknown statistic id', $game);
+    }
+
+    public function testFinalCombosAreRecordedForEndGameAggregations(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+
+        $this->assertStringContainsString('recordFinalCombo', $game);
+        $this->assertStringContainsString('currentFinalComboSnapshot', $game);
+        $this->assertStringContainsString('ensureFinalComboTable', $game);
+        $this->assertStringContainsString('final_combo', $game);
+        $this->assertStringContainsString('finalComboAggregates', $game);
+        $this->assertStringContainsString('currentScenarioKey', $game);
+        $this->assertStringContainsString('currentDifficultyKey', $game);
+        $this->assertStringContainsString('sort($comboPowers);', $game);
+        $this->assertStringContainsString('combo_context_outcome', self::readFile(dirname(__DIR__) . '/dbmodel.sql'));
+        $this->assertStringContainsString('combo_boss_outcome', self::readFile(dirname(__DIR__) . '/dbmodel.sql'));
+    }
+
+    public function testPowerHistoryRecordsWhichPowersArePlayedAndTaken(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+        $dbmodel = self::readFile(dirname(__DIR__) . '/dbmodel.sql');
+
+        $this->assertStringContainsString('power_history', $dbmodel);
+        $this->assertStringContainsString('recordPowerHistory', $game);
+        $this->assertStringContainsString('recordPowerHistory($playerId, $powerKey, \'played\')', $game);
+        $this->assertStringContainsString('recordPowerHistory($playerId, $chosenPowerKey, \'taken\')', $game);
+        $this->assertStringContainsString('powerHistoryAggregates', $game);
+    }
+
+    public function testWinStreaksAreStoredByScenarioDifficultyAndPlayerCount(): void
+    {
+        $game = self::readFile(dirname(__DIR__) . '/hacknslash.game.php');
+        $dbmodel = self::readFile(dirname(__DIR__) . '/dbmodel.sql');
+
+        $this->assertStringContainsString('win_streak', $dbmodel);
+        $this->assertStringContainsString('win_streak_context', $dbmodel);
+        $this->assertStringContainsString('recordWinStreak', $game);
+        $this->assertStringContainsString('winStreakAggregates', $game);
+        $this->assertStringContainsString('$outcome === \'win\'', $game);
     }
 
     public function testGlobalStateArgsDoNotRequireLoggedPlayer(): void
@@ -609,6 +690,9 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('hns_card_zoom', $js);
         $this->assertStringContainsString('updatePowerCardZoom', $js);
         $this->assertStringContainsString('hns_cards_zoom_3', $css);
+        $this->assertStringContainsString('isRewardReplacementSuggested', $js);
+        $this->assertStringContainsString('hns_reward_replace_candidate', $js);
+        $this->assertStringContainsString('.hns_power_card.hns_reward_replace_candidate', $css);
         $this->assertStringContainsString('updateRewardFocusState', $js);
         $this->assertStringContainsString('hns_reward_focus', $js);
         $this->assertStringContainsString('hns_panel_folded', $css);
@@ -745,14 +829,24 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('hns_entity_shielded', $js);
         $this->assertStringContainsString('hns_entity_thorns', $js);
         $this->assertStringContainsString('hns_entity_thorns_icon', $js);
-        $this->assertStringContainsString('cards/monsters/thorns.webp', $js);
+        $this->assertStringContainsString('tiles/markers/thorns.webp', $js);
         $this->assertStringContainsString('hasThorns', $js);
         $this->assertStringContainsString("indexOf('thorns') !== -1", $js);
-        $this->assertStringContainsString('parseInt(entity.has_shield || 0, 10) === 1', $js);
-        $this->assertStringContainsString('parseInt(entity.shield_broken || 0, 10) !== 1', $js);
+        $this->assertStringContainsString('this.intFlag(entity.has_shield) === 1', $js);
+        $this->assertStringContainsString('this.intFlag(entity.shield_broken) !== 1', $js);
+        $this->assertStringContainsString('intFlag: function (value)', $js);
+        $this->assertStringContainsString('this.gamedatas.entities[entityId].shield_broken = 1;', $js);
+        $this->assertStringNotContainsString("status.indexOf('shield') !== -1", $js);
+        $this->assertStringNotContainsString("levelAbilities[i] === 'shield'", $js);
         $this->assertStringContainsString('updateEntityShieldFromEvent', $js);
         $this->assertStringContainsString("dojo.query('.hns_entity_shield_icon', node)", $js);
         $this->assertStringContainsString('dojo.destroy(shieldIcon)', $js);
+        $this->assertStringNotContainsString('shield_state_by_entity_id', $js);
+        $this->assertStringContainsString('this.hasActiveShield(entity)', $js);
+        $this->assertStringContainsString("this.markPanelDirty('monsters')", $js);
+        $this->assertStringContainsString('this.flushDirtyPanels();', $js);
+        $this->assertStringNotContainsString('this.flushPanels()', $js);
+        $this->assertStringContainsString("dojo.toggleClass(node, 'hns_entity_shielded', this.hasActiveShield(entity));", $js);
         $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
         $this->assertStringContainsString('.hns_entity_shield_icon', $css);
         $this->assertStringContainsString('.hns_entity_shielded', $css);

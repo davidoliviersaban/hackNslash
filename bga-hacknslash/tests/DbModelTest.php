@@ -51,4 +51,41 @@ final class DbModelTest extends TestCase
         $this->assertStringContainsString('`entity_shield_broken` TINYINT UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
         $this->assertStringContainsString('`entity_slot` TINYINT UNSIGNED DEFAULT NULL', $this->sql);
     }
+
+    public function testFinalComboTableStoresEndGameSnapshots(): void
+    {
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `final_combo`', $this->sql);
+        $this->assertStringContainsString('`scenario` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`difficulty` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`player_count` TINYINT UNSIGNED NOT NULL', $this->sql);
+        $this->assertStringContainsString('`boss_key` VARCHAR(32) DEFAULT NULL', $this->sql);
+        $this->assertStringContainsString('`outcome` VARCHAR(8) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`combo_key` VARCHAR(255) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`combo_json` TEXT NOT NULL', $this->sql);
+        $this->assertStringContainsString('KEY `combo_context_outcome` (`scenario`, `difficulty`, `outcome`, `player_count`)', $this->sql);
+        $this->assertStringContainsString('KEY `combo_boss_outcome` (`boss_key`, `outcome`)', $this->sql);
+        $this->assertStringContainsString('KEY `combo_key_idx` (`combo_key`(191))', $this->sql);
+    }
+
+    public function testPowerHistoryTableStoresPlayedAndTakenPowerKeys(): void
+    {
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `power_history`', $this->sql);
+        $this->assertStringContainsString('`player_id` INT(10) UNSIGNED NOT NULL', $this->sql);
+        $this->assertStringContainsString('`scenario` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`difficulty` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`power_key` VARCHAR(32) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`event_type` VARCHAR(8) NOT NULL', $this->sql);
+        $this->assertStringContainsString('KEY `power_history_event` (`scenario`, `difficulty`, `event_type`, `power_key`)', $this->sql);
+    }
+
+    public function testWinStreakTableStoresContextualStreaks(): void
+    {
+        $this->assertStringContainsString('CREATE TABLE IF NOT EXISTS `win_streak`', $this->sql);
+        $this->assertStringContainsString('`scenario` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`difficulty` VARCHAR(16) NOT NULL', $this->sql);
+        $this->assertStringContainsString('`player_count` TINYINT UNSIGNED NOT NULL', $this->sql);
+        $this->assertStringContainsString('`current_streak` INT(10) UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
+        $this->assertStringContainsString('`best_streak` INT(10) UNSIGNED NOT NULL DEFAULT \'0\'', $this->sql);
+        $this->assertStringContainsString('UNIQUE KEY `win_streak_context` (`scenario`, `difficulty`, `player_count`)', $this->sql);
+    }
 }

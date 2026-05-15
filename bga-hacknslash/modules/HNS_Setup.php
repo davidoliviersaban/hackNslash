@@ -205,7 +205,7 @@ trait HNS_Setup
         }));
         shuffle($powerKeys);
 
-        return array_slice($powerKeys, 0, self::HNS_BOSS_FIGHT_POWER_COUNT);
+        return ['strike', ...array_slice($powerKeys, 0, self::HNS_BOSS_FIGHT_POWER_COUNT)];
     }
 
     protected function initializePlayerPowers(int $playerId, ?array $powerKeys = null): void

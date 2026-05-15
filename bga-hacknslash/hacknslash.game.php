@@ -66,11 +66,14 @@ class Hacknslash extends \Bga\GameFramework\Table
         foreach ($players as $playerId => $player) {
             $this->bga->playerScore->set((int) $playerId, 0);
         }
+        $this->initPlayerStats(array_keys($players));
 
+        $scenario = (int) ($options[100] ?? HNS_SCENARIO_DUNGEON);
         $difficulty = (int) ($options[101] ?? HNS_DIFFICULTY_NORMAL);
-        $startLevel = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_LEVEL : HNS_FIRST_LEVEL;
-        $startingHealth = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? HNS_BOSS_FIGHT_HEALTH : HNS_DEFAULT_HEALTH;
-        $startingPowers = $difficulty === HNS_DIFFICULTY_BOSS_FIGHT ? $this->bossFightStartingPowers() : null;
+        $startLevel = $scenario === HNS_SCENARIO_BOSS_FIGHT ? HNS_BOSS_LEVEL : $this->startingDungeonLevelForPlayerCount(count($players));
+        $startingHealth = $this->startingHealthForDifficulty($difficulty);
+        $startingPowers = $scenario === HNS_SCENARIO_BOSS_FIGHT ? $this->bossFightStartingPowers() : null;
+        $this->saveGameContext($scenario, $difficulty);
 
         $this->setGameStateInitialValue('current_level', $startLevel);
         $this->setGameStateInitialValue('selected_tile', 0);
@@ -197,6 +200,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $result['events'] = array_merge($result['events'] ?? [], $slimeCleanup['events']);
         $this->persistEngineState($result['state']);
         $this->notifyEngineEvents($result['events'] ?? []);
+        $this->recordDamageTakenStats($result['events'] ?? []);
         if (!empty($result['state']['game_won'])) {
             $this->scoreCooperativeVictory();
             $this->gamestate->nextState('gameEnd');
@@ -204,6 +208,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         }
 
         if (HNS_RoundEngine::isGameLost($result['state'])) {
+            $this->recordCooperativeDefeat();
             $this->gamestate->nextState('gameEnd');
             return;
         }
@@ -220,7 +225,9 @@ class Hacknslash extends \Bga\GameFramework\Table
         $result['events'] = array_merge($result['events'] ?? [], $slimeCleanup['events']);
         $this->persistEngineState($result['state']);
         $this->notifyEngineEvents($result['events'] ?? []);
+        $this->recordDamageTakenStats($result['events'] ?? []);
         if (HNS_RoundEngine::isGameLost($result['state'])) {
+            $this->recordCooperativeDefeat();
             $this->gamestate->nextState('gameEnd');
             return;
         }
@@ -348,6 +355,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         }
 
         $events = $this->resolvePowerForActivePlayer($powerKey, $payload);
+        $this->recordHeroPowerStats($playerId, $powerKey, $events);
 
         $isChainedPlay = $playsRemaining > 0;
         $cooldown = $isChainedPlay ? $currentCooldown : $this->cooldownAfterPowerUse($powerKey, $isFree);
@@ -501,6 +509,7 @@ class Hacknslash extends \Bga\GameFramework\Table
     private function nextStateAfterHeroAction(int $playerId): void
     {
         if ($this->shouldEndActivePlayerTurn($playerId)) {
+            $this->safeIncPlayerStat(1, 'turns_played', $playerId);
             $this->gamestate->setPlayerNonMultiactive($playerId, 'roundEnd');
             return;
         }
@@ -564,9 +573,493 @@ class Hacknslash extends \Bga\GameFramework\Table
 
     private function scoreCooperativeVictory(): void
     {
+        $this->recordFinalCombo('win');
         foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
             $this->bga->playerScore->set((int) $player['id'], 1);
+            $this->safeIncPlayerStat(1, 'victories', (int) $player['id']);
         }
+    }
+
+    /** @param array<int|string, mixed> $playerIds */
+    private function initPlayerStats(array $playerIds): void
+    {
+        foreach ($playerIds as $playerId) {
+            foreach ($this->playerStatNames() as $statName) {
+                $this->safeInitPlayerStat($statName, (int) $playerId);
+            }
+        }
+    }
+
+    /** @return array<int, string> */
+    private function playerStatNames(): array
+    {
+        return [
+            'powers_taken',
+            'powers_played',
+            'damage_taken',
+            'damage_dealt',
+            'monsters_killed',
+            'victories',
+            'defeats',
+            'turns_played',
+            'dungeon_victories',
+            'dungeon_defeats',
+            'boss_fight_victories',
+            'boss_fight_defeats',
+            'easy_victories',
+            'easy_defeats',
+            'normal_victories',
+            'normal_defeats',
+            'hard_victories',
+            'hard_defeats',
+            'hardcore_victories',
+            'hardcore_defeats',
+            'solo_victories',
+            'solo_defeats',
+            'duo_victories',
+            'duo_defeats',
+            'current_win_streak',
+            'best_win_streak',
+            ...array_map(static fn (string $powerKey): string => 'power_taken_' . $powerKey, $this->takablePowerStatKeys()),
+            ...array_map(static fn (string $powerKey): string => 'power_played_' . $powerKey, $this->powerStatKeys()),
+        ];
+    }
+
+    /** @return array<int, string> */
+    private function takablePowerStatKeys(): array
+    {
+        return array_values(array_diff($this->powerStatKeys(), ['attack', 'strike']));
+    }
+
+    /** @return array<int, string> */
+    private function powerStatKeys(): array
+    {
+        return [
+            'attack',
+            'strike',
+            'dash_1',
+            'dash_2',
+            'dash_3',
+            'dash_attack_1',
+            'dash_attack_2',
+            'dash_attack_3',
+            'fireball_1',
+            'fireball_2',
+            'fireball_3',
+            'grab_1',
+            'grab_2',
+            'grab_3',
+            'heal_1',
+            'heal_2',
+            'heal_3',
+            'jump_1',
+            'jump_2',
+            'jump_3',
+            'leech_1',
+            'leech_2',
+            'leech_3',
+            'vortex_1',
+            'vortex_2',
+            'vortex_3',
+            'whirlwind_1',
+            'whirlwind_2',
+            'whirlwind_3',
+            'power_strike_1',
+            'power_strike_2',
+            'power_strike_3',
+            'quick_strike_1',
+            'quick_strike_2',
+            'quick_strike_3',
+            'quick_shot_1',
+            'quick_shot_2',
+            'quick_shot_3',
+            'point_blank_1',
+            'point_blank_2',
+            'point_blank_3',
+        ];
+    }
+
+    private function safeInitPlayerStat(string $statName, int $playerId): void
+    {
+        try {
+            $this->initStat('player', $statName, 0, $playerId);
+        } catch (Throwable $e) {
+            if (strpos($e->getMessage(), 'Unknown statistic id') === false) {
+                throw $e;
+            }
+        }
+    }
+
+    private function safeIncPlayerStat(int $value, string $statName, int $playerId): void
+    {
+        if ($value <= 0) {
+            return;
+        }
+
+        try {
+            $this->incStat($value, $statName, $playerId);
+        } catch (Throwable $e) {
+            if (strpos($e->getMessage(), 'Unknown statistic id') === false) {
+                throw $e;
+            }
+        }
+    }
+
+    private function safeSetPlayerStat(int $value, string $statName, int $playerId): void
+    {
+        try {
+            $this->setStat($value, $statName, $playerId);
+        } catch (Throwable $e) {
+            if (strpos($e->getMessage(), 'Unknown statistic id') === false) {
+                throw $e;
+            }
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function recordHeroPowerStats(int $playerId, string $powerKey, array $events): void
+    {
+        $this->safeIncPlayerStat(1, 'powers_played', $playerId);
+        $this->recordPowerHistory($playerId, $powerKey, 'played');
+
+        foreach ($events as $event) {
+            $type = (string) ($event['type'] ?? '');
+            if ($type === 'entityDamaged') {
+                $this->recordDamageDealtEvent($event);
+                $this->recordDamageTakenEvent($event);
+            } elseif ($type === 'afterKill') {
+                $this->recordMonsterKilledEvent($event);
+            }
+        }
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function recordDamageTakenStats(array $events): void
+    {
+        foreach ($events as $event) {
+            $type = (string) ($event['type'] ?? '');
+            if (in_array($type, ['entityDamaged', 'monsterAttack', 'monsterCharge', 'trapDamage', 'thornsDamage'], true)) {
+                $this->recordDamageTakenEvent($event);
+            } elseif ($type === 'monsterFrontArc' || $type === 'monsterExplode') {
+                $this->recordMultiTargetDamageTakenEvent($event);
+            }
+        }
+    }
+
+    private function recordCooperativeDefeat(): void
+    {
+        $this->recordFinalCombo('loss');
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
+            $this->safeIncPlayerStat(1, 'defeats', (int) $player['id']);
+        }
+    }
+
+    private function recordFinalCombo(string $outcome): void
+    {
+        $this->ensureFinalComboTable();
+        if ((int) $this->getUniqueValueFromDB('SELECT COUNT(*) FROM final_combo') > 0) {
+            return;
+        }
+
+        $snapshot = $this->currentFinalComboSnapshot($outcome);
+        $bossKey = $this->hns_sql_nullable_string($snapshot['boss_key']);
+        $safeOutcome = $this->hns_sql_escape($outcome);
+        $safeScenario = $this->hns_sql_escape($snapshot['scenario']);
+        $safeDifficulty = $this->hns_sql_escape($snapshot['difficulty']);
+        $safeComboKey = $this->hns_sql_escape($snapshot['combo_key']);
+        $safeComboJson = $this->hns_sql_escape((string) json_encode($snapshot['players']));
+        $playerCount = (int) $snapshot['player_count'];
+
+        $this->DbQuery("INSERT INTO final_combo (scenario, difficulty, player_count, boss_key, outcome, combo_key, combo_json) VALUES ('$safeScenario', '$safeDifficulty', $playerCount, $bossKey, '$safeOutcome', '$safeComboKey', '$safeComboJson')");
+        $this->recordWinStreak($snapshot['scenario'], $snapshot['difficulty'], $playerCount, $outcome);
+        $this->recordContextualOutcomeStats($snapshot['scenario'], $snapshot['difficulty'], $playerCount, $outcome);
+    }
+
+    /**
+     * @return array{scenario:string, difficulty:string, player_count:int, boss_key:?string, combo_key:string, players:array<int, array{player_id:int, powers:list<string>}>, outcome:string}
+     */
+    private function currentFinalComboSnapshot(string $outcome): array
+    {
+        $players = [];
+        $comboPowers = [];
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player ORDER BY player_id') as $player) {
+            $playerId = (int) $player['id'];
+            $powers = array_values(array_map(
+                static fn (array $row): string => (string) $row['power_key'],
+                $this->getCollectionFromDb("SELECT power_key FROM player_power WHERE player_id = $playerId ORDER BY power_slot")
+            ));
+            sort($powers);
+            $players[] = ['player_id' => $playerId, 'powers' => $powers];
+            array_push($comboPowers, ...$powers);
+        }
+        sort($comboPowers);
+
+        return [
+            'scenario' => $this->currentScenarioKey(),
+            'difficulty' => $this->currentDifficultyKey(),
+            'player_count' => count($players),
+            'boss_key' => $this->currentBossKey(),
+            'combo_key' => implode('+', $comboPowers),
+            'players' => $players,
+            'outcome' => $outcome,
+        ];
+    }
+
+    private function currentBossKey(): ?string
+    {
+        $bossKey = $this->getUniqueValueFromDB("SELECT entity_boss_key FROM entity WHERE entity_type = 'boss' ORDER BY entity_id DESC LIMIT 1");
+
+        return is_string($bossKey) && $bossKey !== '' ? $bossKey : null;
+    }
+
+    private function ensureFinalComboTable(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $this->DbQuery("CREATE TABLE IF NOT EXISTS final_combo (combo_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, player_count TINYINT UNSIGNED NOT NULL, boss_key VARCHAR(32) DEFAULT NULL, outcome VARCHAR(8) NOT NULL, combo_key VARCHAR(255) NOT NULL, combo_json TEXT NOT NULL, PRIMARY KEY (combo_id), KEY combo_context_outcome (scenario, difficulty, outcome, player_count), KEY combo_boss_outcome (boss_key, outcome), KEY combo_key_idx (combo_key(191))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
+        $done = true;
+    }
+
+    private function ensurePowerHistoryTable(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $this->DbQuery("CREATE TABLE IF NOT EXISTS power_history (history_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, player_id INT(10) UNSIGNED NOT NULL, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, power_key VARCHAR(32) NOT NULL, event_type VARCHAR(8) NOT NULL, PRIMARY KEY (history_id), KEY power_history_event (scenario, difficulty, event_type, power_key), KEY power_history_player (player_id, event_type)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
+        $done = true;
+    }
+
+    private function ensureWinStreakTable(): void
+    {
+        static $done = false;
+        if ($done) {
+            return;
+        }
+
+        $this->DbQuery("CREATE TABLE IF NOT EXISTS win_streak (streak_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, player_count TINYINT UNSIGNED NOT NULL, current_streak INT(10) UNSIGNED NOT NULL DEFAULT '0', best_streak INT(10) UNSIGNED NOT NULL DEFAULT '0', PRIMARY KEY (streak_id), UNIQUE KEY win_streak_context (scenario, difficulty, player_count)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
+        $done = true;
+    }
+
+    private function recordWinStreak(string $scenario, string $difficulty, int $playerCount, string $outcome): void
+    {
+        $this->ensureWinStreakTable();
+        $safeScenario = $this->hns_sql_escape($scenario);
+        $safeDifficulty = $this->hns_sql_escape($difficulty);
+
+        $current = (int) $this->getUniqueValueFromDB("SELECT current_streak FROM win_streak WHERE scenario = '$safeScenario' AND difficulty = '$safeDifficulty' AND player_count = $playerCount LIMIT 1");
+        $best = (int) $this->getUniqueValueFromDB("SELECT best_streak FROM win_streak WHERE scenario = '$safeScenario' AND difficulty = '$safeDifficulty' AND player_count = $playerCount LIMIT 1");
+        $current = $outcome === 'win' ? $current + 1 : 0;
+        $best = max($best, $current);
+
+        $this->DbQuery("REPLACE INTO win_streak (scenario, difficulty, player_count, current_streak, best_streak) VALUES ('$safeScenario', '$safeDifficulty', $playerCount, $current, $best)");
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
+            $playerId = (int) $player['id'];
+            $this->safeSetPlayerStat($current, 'current_win_streak', $playerId);
+            $this->safeSetPlayerStat($best, 'best_win_streak', $playerId);
+        }
+    }
+
+    private function recordContextualOutcomeStats(string $scenario, string $difficulty, int $playerCount, string $outcome): void
+    {
+        $suffix = $outcome === 'win' ? 'victories' : 'defeats';
+        $playerCountPrefix = $playerCount >= 2 ? 'duo' : 'solo';
+        $statNames = [
+            $scenario . '_' . $suffix,
+            $difficulty . '_' . $suffix,
+            $playerCountPrefix . '_' . $suffix,
+        ];
+
+        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
+            foreach ($statNames as $statName) {
+                $this->safeIncPlayerStat(1, $statName, (int) $player['id']);
+            }
+        }
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function winStreakAggregates(): array
+    {
+        $this->ensureWinStreakTable();
+        $rows = $this->getCollectionFromDb('SELECT scenario, difficulty, player_count, current_streak, best_streak FROM win_streak ORDER BY best_streak DESC, current_streak DESC, scenario ASC, difficulty ASC, player_count ASC');
+        return array_values($rows);
+    }
+
+    private function recordPowerHistory(int $playerId, string $powerKey, string $eventType): void
+    {
+        $this->ensurePowerHistoryTable();
+        $safeScenario = $this->hns_sql_escape($this->currentScenarioKey());
+        $safeDifficulty = $this->hns_sql_escape($this->currentDifficultyKey());
+        $safePowerKey = $this->hns_sql_escape($powerKey);
+        $safeEventType = $this->hns_sql_escape($eventType);
+
+        $this->DbQuery("INSERT INTO power_history (player_id, scenario, difficulty, power_key, event_type) VALUES ($playerId, '$safeScenario', '$safeDifficulty', '$safePowerKey', '$safeEventType')");
+        if ($eventType !== 'taken' || in_array($powerKey, $this->takablePowerStatKeys(), true)) {
+            $this->safeIncPlayerStat(1, 'power_' . $eventType . '_' . $powerKey, $playerId);
+        }
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> */
+    private function finalComboAggregates(): array
+    {
+        $this->ensureFinalComboTable();
+
+        return [
+            'winning_combos' => $this->comboAggregate("WHERE outcome = 'win'", 'wins'),
+            'most_played_combos' => $this->comboAggregate('', 'plays'),
+            'best_combo_vs_slasher' => $this->comboAggregate("WHERE outcome = 'win' AND boss_key = 'slasher'", 'wins'),
+            'best_combo_vs_striker' => $this->comboAggregate("WHERE outcome = 'win' AND boss_key = 'striker'", 'wins'),
+            'worst_combo' => $this->comboAggregate("WHERE outcome = 'loss'", 'losses'),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function comboAggregate(string $whereClause, string $countAlias): array
+    {
+        $rows = $this->getCollectionFromDb("SELECT combo_key, scenario, difficulty, player_count, boss_key, COUNT(*) $countAlias FROM final_combo $whereClause GROUP BY combo_key, scenario, difficulty, player_count, boss_key ORDER BY $countAlias DESC, combo_key ASC LIMIT 10");
+        return array_values($rows);
+    }
+
+    /** @return array<string, array<int, array<string, mixed>>> */
+    private function powerHistoryAggregates(): array
+    {
+        $this->ensurePowerHistoryTable();
+
+        return [
+            'powers_played' => $this->powerHistoryAggregate('played'),
+            'powers_taken' => $this->powerHistoryAggregate('taken'),
+        ];
+    }
+
+    /** @return array<int, array<string, mixed>> */
+    private function powerHistoryAggregate(string $eventType): array
+    {
+        $safeEventType = $this->hns_sql_escape($eventType);
+        $rows = $this->getCollectionFromDb("SELECT power_key, scenario, difficulty, COUNT(*) count FROM power_history WHERE event_type = '$safeEventType' GROUP BY power_key, scenario, difficulty ORDER BY count DESC, power_key ASC LIMIT 20");
+        return array_values($rows);
+    }
+
+    private function saveGameContext(int $scenario, int $difficulty): void
+    {
+        $safeScenario = $this->hns_sql_escape($this->scenarioKey($scenario));
+        $safeDifficulty = $this->hns_sql_escape($this->difficultyKey($difficulty));
+        $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('scenario', '$safeScenario')");
+        $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('difficulty', '$safeDifficulty')");
+    }
+
+    private function startingHealthForDifficulty(int $difficulty): int
+    {
+        return match ($difficulty) {
+            HNS_DIFFICULTY_EASY => HNS_EASY_HEALTH,
+            HNS_DIFFICULTY_HARD => HNS_HARD_HEALTH,
+            HNS_DIFFICULTY_HARDCORE => HNS_HARDCORE_HEALTH,
+            default => HNS_DEFAULT_HEALTH,
+        };
+    }
+
+    private function startingDungeonLevelForPlayerCount(int $playerCount): int
+    {
+        return $playerCount >= 2 ? 3 : HNS_FIRST_LEVEL;
+    }
+
+    private function currentScenarioKey(): string
+    {
+        $value = $this->getUniqueValueFromDB("SELECT var_value FROM global_var WHERE var_name = 'scenario'");
+        return is_string($value) && $value !== '' ? $value : $this->scenarioKey(HNS_SCENARIO_DUNGEON);
+    }
+
+    private function currentDifficultyKey(): string
+    {
+        $value = $this->getUniqueValueFromDB("SELECT var_value FROM global_var WHERE var_name = 'difficulty'");
+        return is_string($value) && $value !== '' ? $value : $this->difficultyKey(HNS_DIFFICULTY_NORMAL);
+    }
+
+    private function scenarioKey(int $scenario): string
+    {
+        return $scenario === HNS_SCENARIO_BOSS_FIGHT ? 'boss_fight' : 'dungeon';
+    }
+
+    private function difficultyKey(int $difficulty): string
+    {
+        return match ($difficulty) {
+            HNS_DIFFICULTY_EASY => 'easy',
+            HNS_DIFFICULTY_HARD => 'hard',
+            HNS_DIFFICULTY_HARDCORE => 'hardcore',
+            default => 'normal',
+        };
+    }
+
+    /** @param array<string, mixed> $event */
+    private function recordDamageDealtEvent(array $event): void
+    {
+        $sourcePlayerId = $this->heroOwnerForEntityId((int) ($event['source_entity_id'] ?? 0));
+        if ($sourcePlayerId === null || !$this->isEnemyEntityId((int) ($event['target_entity_id'] ?? 0))) {
+            return;
+        }
+
+        $this->safeIncPlayerStat(max(0, (int) ($event['damage'] ?? 0)), 'damage_dealt', $sourcePlayerId);
+    }
+
+    /** @param array<string, mixed> $event */
+    private function recordDamageTakenEvent(array $event): void
+    {
+        $targetPlayerId = $this->heroOwnerForEntityId((int) ($event['target_entity_id'] ?? 0));
+        if ($targetPlayerId === null) {
+            return;
+        }
+
+        $this->safeIncPlayerStat(max(0, (int) ($event['damage'] ?? 0)), 'damage_taken', $targetPlayerId);
+    }
+
+    /** @param array<string, mixed> $event */
+    private function recordMultiTargetDamageTakenEvent(array $event): void
+    {
+        $damage = max(0, (int) ($event['damage'] ?? 0));
+        if ($damage === 0 || !is_array($event['target_entity_ids'] ?? null)) {
+            return;
+        }
+
+        foreach ($event['target_entity_ids'] as $targetEntityId) {
+            $targetPlayerId = $this->heroOwnerForEntityId((int) $targetEntityId);
+            if ($targetPlayerId !== null) {
+                $this->safeIncPlayerStat($damage, 'damage_taken', $targetPlayerId);
+            }
+        }
+    }
+
+    /** @param array<string, mixed> $event */
+    private function recordMonsterKilledEvent(array $event): void
+    {
+        $sourcePlayerId = $this->heroOwnerForEntityId((int) ($event['source_entity_id'] ?? 0));
+        if ($sourcePlayerId === null || !$this->isMonsterEntityId((int) ($event['target_entity_id'] ?? 0))) {
+            return;
+        }
+
+        $this->safeIncPlayerStat(1, 'monsters_killed', $sourcePlayerId);
+    }
+
+    private function heroOwnerForEntityId(int $entityId): ?int
+    {
+        if ($entityId <= 0) {
+            return null;
+        }
+
+        $playerId = (int) $this->getUniqueValueFromDB("SELECT entity_owner FROM entity WHERE entity_id = $entityId AND entity_type = 'hero' LIMIT 1");
+        return $playerId > 0 ? $playerId : null;
+    }
+
+    private function isEnemyEntityId(int $entityId): bool
+    {
+        return $entityId > 0 && (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM entity WHERE entity_id = $entityId AND entity_type IN ('monster', 'boss')") > 0;
+    }
+
+    private function isMonsterEntityId(int $entityId): bool
+    {
+        return $entityId > 0 && (int) $this->getUniqueValueFromDB("SELECT COUNT(*) FROM entity WHERE entity_id = $entityId AND entity_type = 'monster'") > 0;
     }
 
     private function currentPlayerIdOrFirstPlayerId(): int
@@ -752,6 +1245,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->clearFreeActionChain();
         $state = HNS_RoundEngine::endPlayerTurn($this->loadEngineState(), $playerId);
         $this->persistPlayerActionFlags($state['players'][$playerId]);
+        $this->safeIncPlayerStat(1, 'turns_played', $playerId);
         $this->gamestate->setPlayerNonMultiactive($playerId, 'roundEnd');
     }
 
@@ -789,6 +1283,8 @@ class Hacknslash extends \Bga\GameFramework\Table
         }
 
         $this->removePowerFromDeck($chosenPowerKey);
+        $this->safeIncPlayerStat(1, 'powers_taken', $playerId);
+        $this->recordPowerHistory($playerId, $chosenPowerKey, 'taken');
 
         $this->clearRewardForPlayer($playerId);
         $this->notifyAllPlayers('rewardChosen', clienttranslate('${player_name} chooses a reward'), [

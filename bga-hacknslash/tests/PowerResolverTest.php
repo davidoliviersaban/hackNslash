@@ -197,7 +197,7 @@ final class PowerResolverTest extends TestCase
         $result = HNS_PowerResolver::resolve('quick_shot_1', 10, ['target_entity_id' => 21], $state, $this->powers);
 
         $this->assertSame(2, $result['state']['entities'][21]['health']);
-        $this->assertTrue($result['state']['entities'][21]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][21]['shield_broken']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'quick_shot_1'],
             ['type' => 'shieldBroken', 'source_entity_id' => 21, 'damage_absorbed' => 1],
@@ -252,7 +252,7 @@ final class PowerResolverTest extends TestCase
 
         $result = HNS_PowerResolver::resolve('point_blank_3', 10, ['target_entity_id' => 30], $state, $this->powers);
 
-        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
         $this->assertSame(11, $result['state']['entities'][30]['tile_id']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'point_blank_3'],
@@ -341,7 +341,7 @@ final class PowerResolverTest extends TestCase
         $result = HNS_PowerResolver::resolve('strike', 10, ['target_entity_id' => 20], $state, $this->powers);
 
         $this->assertSame(2, $result['state']['entities'][20]['health']);
-        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][20]['shield_broken']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'strike'],
             ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 2],
@@ -358,7 +358,7 @@ final class PowerResolverTest extends TestCase
 
         $this->assertSame(5, $result['state']['entities'][20]['health']);
         $this->assertSame('active', $result['state']['entities'][20]['state']);
-        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][20]['shield_broken']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'quick_strike_2'],
             ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 3],
@@ -374,7 +374,7 @@ final class PowerResolverTest extends TestCase
         $result = HNS_PowerResolver::resolve('strike', 10, ['target_entity_id' => 20], $state, $this->powers);
 
         $this->assertSame(2, $result['state']['entities'][20]['health']);
-        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][20]['shield_broken']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'strike'],
             ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 2],
@@ -392,14 +392,15 @@ final class PowerResolverTest extends TestCase
 
         $this->assertSame(0, $result['state']['entities'][20]['health']);
         $this->assertSame('dead', $result['state']['entities'][20]['state']);
-        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
-        $this->assertSame(2, $result['state']['entities'][30]['health']);
-        $this->assertTrue($result['state']['entities'][30]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][30]['health']);
+        $this->assertSame(1, $result['state']['entities'][30]['shield_broken']);
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'power_strike_2'],
             ['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 3],
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_KILL, 'source_entity_id' => 10, 'target_entity_id' => 20],
             ['type' => 'shieldBroken', 'source_entity_id' => 30, 'damage_absorbed' => 1],
+            ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 30, 'damage' => 1, 'target_health' => 1],
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [20]],
         ], $result['events']);
     }
@@ -1150,6 +1151,60 @@ final class PowerResolverTest extends TestCase
             ['type' => 'bossPhaseDefeated', 'source_entity_id' => 30, 'boss_key' => 'slasher', 'phase' => 1],
             ['type' => 'bossPhaseStarted', 'source_entity_id' => 30, 'entity_id' => 30, 'boss_key' => 'slasher', 'phase' => 2, 'health' => 8],
         ], $result['events']);
+    }
+
+    public function testWhirlwindBreaksBossShieldInsteadOfDamagingBoss(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['bosses'] = $bosses;
+        $state['entities'][30] = ['id' => 30, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 3, 'monster_size' => 'boss', 'tile_id' => 2, 'health' => 2, 'state' => 'active', 'has_shield' => 1, 'shield_broken' => 0];
+
+        $result = HNS_PowerResolver::resolve('whirlwind_1', 10, [], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertSame('active', $result['state']['entities'][30]['state']);
+        $this->assertSame(3, $result['state']['entities'][30]['phase']);
+        $this->assertSame(1, $result['state']['entities'][30]['shield_broken']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'whirlwind_1'],
+            ['type' => 'shieldBroken', 'source_entity_id' => 30, 'damage_absorbed' => 2],
+        ], $result['events']);
+    }
+
+    public function testPowerStrikeBreaksBossShieldInsteadOfDamagingBoss(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['bosses'] = $bosses;
+        $state['entities'][30] = ['id' => 30, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 3, 'monster_size' => 'boss', 'tile_id' => 2, 'health' => 2, 'state' => 'active', 'has_shield' => 1, 'shield_broken' => 0];
+
+        $result = HNS_PowerResolver::resolve('power_strike_1', 10, ['target_entity_id' => 30], $state, $this->powers);
+
+        $this->assertSame(2, $result['state']['entities'][30]['health']);
+        $this->assertSame('active', $result['state']['entities'][30]['state']);
+        $this->assertSame(1, $result['state']['entities'][30]['shield_broken']);
+        $this->assertContains('shieldBroken', array_column($result['events'], 'type'));
+        $this->assertNotContains('bossPhaseDefeated', array_column($result['events'], 'type'));
+    }
+
+    public function testFireballAndLeechIgnoreBossShield(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        $state = $this->state;
+        unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
+        $state['bosses'] = $bosses;
+        $state['entities'][30] = ['id' => 30, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => 3, 'monster_size' => 'boss', 'tile_id' => 2, 'health' => 4, 'state' => 'active', 'has_shield' => 1, 'shield_broken' => 0];
+
+        $fireball = HNS_PowerResolver::resolve('fireball_1', 10, ['target_tile_id' => 2], $state, $this->powers);
+        $leech = HNS_PowerResolver::resolve('leech_1', 10, ['target_entity_id' => 30], $state, $this->powers);
+
+        $this->assertSame(2, $fireball['state']['entities'][30]['health']);
+        $this->assertSame(0, $fireball['state']['entities'][30]['shield_broken']);
+        $this->assertSame(3, $leech['state']['entities'][30]['health']);
+        $this->assertSame(0, $leech['state']['entities'][30]['shield_broken']);
     }
 
     public function testBossPhaseTransitionDoesNotMoveBeforeAttacking(): void

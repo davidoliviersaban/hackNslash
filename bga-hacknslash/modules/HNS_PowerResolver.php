@@ -1037,7 +1037,7 @@ final class HNS_PowerResolver
     /** @param array<string, mixed> $state */
     private static function hasActiveShield(array $state, int $targetEntityId): bool
     {
-        return ($state['entities'][$targetEntityId]['type'] ?? null) === 'monster'
+        return in_array($state['entities'][$targetEntityId]['type'] ?? null, ['monster', 'boss'], true)
             && (int) ($state['entities'][$targetEntityId]['has_shield'] ?? 0) === 1
             && (int) ($state['entities'][$targetEntityId]['shield_broken'] ?? 0) !== 1;
     }
@@ -1049,7 +1049,7 @@ final class HNS_PowerResolver
      */
     private static function breakShield(int $targetEntityId, int $damageAbsorbed, array $state, array &$events): array
     {
-        $state['entities'][$targetEntityId]['shield_broken'] = true;
+        $state['entities'][$targetEntityId]['shield_broken'] = 1;
         $events[] = ['type' => 'shieldBroken', 'source_entity_id' => $targetEntityId, 'damage_absorbed' => $damageAbsorbed];
 
         return $state;

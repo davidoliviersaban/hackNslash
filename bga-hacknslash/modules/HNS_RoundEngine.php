@@ -197,8 +197,8 @@ final class HNS_RoundEngine
                 continue;
             }
 
-            if (($entity['type'] ?? null) === 'monster' && (int) ($entity['has_shield'] ?? 0) === 1 && (int) ($entity['shield_broken'] ?? 0) !== 1) {
-                $state['entities'][$entityId]['shield_broken'] = true;
+            if (in_array($entity['type'] ?? null, ['monster', 'boss'], true) && (int) ($entity['has_shield'] ?? 0) === 1 && (int) ($entity['shield_broken'] ?? 0) !== 1) {
+                $state['entities'][$entityId]['shield_broken'] = 1;
                 $events[] = ['type' => 'shieldBroken', 'source_entity_id' => (int) $entityId, 'damage_absorbed' => 1];
                 continue;
             }

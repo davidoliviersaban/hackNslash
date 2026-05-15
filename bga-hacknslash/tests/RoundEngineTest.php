@@ -367,7 +367,7 @@ final class RoundEngineTest extends TestCase
         $result = HNS_RoundEngine::activateTraps($state);
 
         $this->assertSame(2, $result['state']['entities'][20]['health']);
-        $this->assertTrue($result['state']['entities'][20]['shield_broken']);
+        $this->assertSame(1, $result['state']['entities'][20]['shield_broken']);
         $this->assertSame([['type' => 'shieldBroken', 'source_entity_id' => 20, 'damage_absorbed' => 1]], $result['events']);
     }
 

@@ -16,6 +16,7 @@ final class HNS_GameEngine
             $layout = self::forceCentralBossFloor($layout);
             $tiles = self::tilesFromLayout($layout);
             $bossTileId = self::tileIdFor((int) floor($layout['grid_size'] / 2), (int) floor($layout['grid_size'] / 2));
+            $bossKey = self::randomBossKey($bossMaterial, $seed + $levelNumber);
 
             return [
                 'level' => $levelNumber,
@@ -23,7 +24,7 @@ final class HNS_GameEngine
                 'level_monster_abilities' => [],
                 'layout' => $layout,
                 'tiles' => $tiles,
-                'entities' => [900 => HNS_BossEngine::initialBossEntity('slasher', 900, (int) $bossTileId, $bossMaterial)],
+                'entities' => [900 => HNS_BossEngine::initialBossEntity($bossKey, 900, (int) $bossTileId, $bossMaterial)],
                 'monster_slots' => [],
                 'reward_offer' => [],
                 'reward_upgrades' => [],
@@ -63,6 +64,19 @@ final class HNS_GameEngine
             'reward_offer' => [],
             'reward_upgrades' => [],
         ];
+    }
+
+    /** @param array<string, array<string, mixed>> $bossMaterial */
+    private static function randomBossKey(array $bossMaterial, int $seed): string
+    {
+        $bossKeys = array_keys($bossMaterial);
+        if ($bossKeys === []) {
+            throw new InvalidArgumentException('No boss material configured.');
+        }
+
+        $rng = new HNS_SeededRandom($seed);
+
+        return (string) $rng->pick(array_values($bossKeys));
     }
 
     /** @param array<string, mixed> $layout */
@@ -289,7 +303,7 @@ final class HNS_GameEngine
     private static function entityOrder(array $entity): int
     {
         if (($entity['type'] ?? null) === 'boss' || ($entity['monster_size'] ?? null) === 'boss') {
-            return 3;
+            return 0;
         }
 
         return ($entity['monster_size'] ?? 'small') === 'big' ? 2 : 1;

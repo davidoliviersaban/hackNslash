@@ -1018,6 +1018,9 @@ define([
         var isFree = this.isPowerFree(power.power_key, activePlayerId);
         var isPlayableCooldown = cooldown > 0 && playsRemaining <= 0;
         var classes = (isPlayableCooldown ? 'hns_cooldown ' : '') + (isFree ? 'hns_free ' : '');
+        if (this.isRewardReplacementSuggested(power)) {
+          classes += 'hns_reward_replace_candidate ';
+        }
         var badges = '';
         if (isFree) {
           badges += '<span class="hns_power_badge hns_power_badge_free">' + _('FREE') + '</span>';
@@ -1096,6 +1099,13 @@ define([
       }
     },
 
+    isRewardReplacementSuggested: function (power) {
+      if (!this.selectedRewardPowerKey || !power || !power.power_key) {
+        return false;
+      }
+      return parseInt(this.getPowerInfo(power.power_key).rank || 0, 10) === 0;
+    },
+
     updateRewardFocusState: function (forceFocus) {
       var hasRewards = (this.rewardOffer && this.rewardOffer.length > 0) || (this.rewardUpgrades && this.rewardUpgrades.length > 0);
       var focused = typeof forceFocus === 'boolean' ? forceFocus : hasRewards;
@@ -1122,7 +1132,7 @@ define([
         html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/shield.webp') + '" alt="Shield" />';
       }
       if (effects.thorns) {
-        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('cards/monsters/thorns.webp') + '" alt="Thorns" />';
+        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/thorns.webp') + '" alt="Thorns" />';
       }
       return html;
     },
@@ -1133,7 +1143,7 @@ define([
         effects += '<img class="hns_entity_shield_icon" src="' + AssetManager.getUrl('tiles/markers/shield.webp') + '" alt="Shield" title="Shield" />';
       }
       if (this.hasThorns(entity)) {
-        effects += '<img class="hns_entity_thorns_icon" src="' + AssetManager.getUrl('cards/monsters/thorns.webp') + '" alt="Thorns" title="Thorns" />';
+        effects += '<img class="hns_entity_thorns_icon" src="' + AssetManager.getUrl('tiles/markers/thorns.webp') + '" alt="Thorns" title="Thorns" />';
       }
       return effects;
     },
@@ -1366,6 +1376,7 @@ define([
     onRewardOfferClick: function (evt) {
       dojo.stopEvent(evt);
       this.selectedRewardPowerKey = evt.currentTarget.getAttribute('data-power-key');
+      this.markPanelDirty('powers');
       this.renderRewardOffer();
     },
 
@@ -1756,6 +1767,7 @@ define([
         this.updateRewardFocusState(false);
       }
       this.pushEvent(_('Reward skipped.'), 'effect');
+      this.markPanelDirty('powers');
       this.markPanelDirty('rewards');
     },
 
@@ -2355,15 +2367,16 @@ define([
         return;
       }
 
-      this.gamedatas.entities[entityId].shield_broken = true;
+      this.gamedatas.entities[entityId].shield_broken = 1;
       var node = $('hns_entity_' + entityId);
       if (node) {
-        dojo.removeClass(node, 'hns_entity_shielded');
         dojo.query('.hns_entity_shield_icon', node).forEach(function (shieldIcon) {
           dojo.destroy(shieldIcon);
         });
       }
       this.updateEntityEffects(entityId);
+      this.markPanelDirty('monsters');
+      this.flushDirtyPanels();
     },
 
     applyBossGrantShield: function (event) {
@@ -2373,10 +2386,12 @@ define([
         if (!this.gamedatas.entities || !this.gamedatas.entities[entityId]) {
           continue;
         }
-        this.gamedatas.entities[entityId].has_shield = true;
-        this.gamedatas.entities[entityId].shield_broken = false;
+        this.gamedatas.entities[entityId].has_shield = 1;
+        this.gamedatas.entities[entityId].shield_broken = 0;
         this.updateEntityEffects(entityId);
       }
+      this.markPanelDirty('monsters');
+      this.flushDirtyPanels();
     },
 
     updateEntityStatusFromEvent: function (event) {
@@ -2399,6 +2414,8 @@ define([
       if (effects.length > 0) {
         effects[0].innerHTML = this.renderEntityEffects(entity);
       }
+      dojo.toggleClass(node, 'hns_entity_shielded', this.hasActiveShield(entity));
+      dojo.toggleClass(node, 'hns_entity_thorns', this.hasThorns(entity));
     },
 
     markEntityDead: function (entityId) {
@@ -2553,7 +2570,7 @@ define([
 
     collectMonsterEffects: function (entity, effects) {
       var status = String(entity.status || '');
-      if (status.indexOf('shield') !== -1) {
+      if (this.hasActiveShield(entity)) {
         effects.shield = true;
       }
       if (status.indexOf('thorn') !== -1) {
@@ -2562,8 +2579,8 @@ define([
 
       var levelAbilities = this.gamedatas.level_monster_abilities || [];
       for (var i = 0; i < levelAbilities.length; i++) {
-        if (levelAbilities[i] === 'shield' || levelAbilities[i] === 'thorns') {
-          effects[levelAbilities[i]] = true;
+        if (levelAbilities[i] === 'thorns') {
+          effects.thorns = true;
         }
       }
     },
@@ -2571,8 +2588,15 @@ define([
     hasActiveShield: function (entity) {
       return !!entity
         && MONSTER_TYPES.indexOf(entity.type) !== -1
-        && parseInt(entity.has_shield || 0, 10) === 1
-        && parseInt(entity.shield_broken || 0, 10) !== 1;
+        && this.intFlag(entity.has_shield) === 1
+        && this.intFlag(entity.shield_broken) !== 1;
+    },
+
+    intFlag: function (value) {
+      if (value === true) { return 1; }
+      if (value === false || value === null || typeof value === 'undefined') { return 0; }
+      var parsed = parseInt(value || 0, 10);
+      return isNaN(parsed) ? 0 : parsed;
     },
 
     hasThorns: function (entity) {

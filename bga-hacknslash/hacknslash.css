@@ -822,6 +822,27 @@
   box-shadow: 0 0 16px var(--hns-cyan-glow);
 }
 
+.hns_power_card.hns_reward_replace_candidate {
+  border-color: #ffe38c;
+  box-shadow: 0 0 0 3px rgba(255, 213, 96, 0.28), 0 0 18px rgba(255, 213, 96, 0.48);
+}
+
+.hns_power_card.hns_reward_replace_candidate::after {
+  content: "REPLACE";
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  padding: 3px 6px;
+  border-radius: var(--hns-radius-pill);
+  background: rgba(34, 21, 6, 0.88);
+  color: #ffe38c;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
 .hns_power_card.hns_cooldown {
   filter: grayscale(0.85) brightness(0.72);
 }

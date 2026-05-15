@@ -26,7 +26,7 @@ final class BossEngineTest extends TestCase
     {
         include dirname(__DIR__) . '/modules/material/bosses.inc.php';
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
-        $bosses['slasher']['phases'][2]['range'] = 2;
+        $bosses['slasher']['phases'][2]['range'] = 3;
 
         $events = [];
         $state = $this->bossState(2, $monsters);
@@ -63,11 +63,11 @@ final class BossEngineTest extends TestCase
         $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
 
         $this->assertContains('shield', $state['level_monster_abilities']);
-        $this->assertTrue($state['entities'][30]['has_shield']);
-        $this->assertTrue($state['entities'][20]['has_shield']);
-        $this->assertFalse($state['entities'][20]['shield_broken']);
-        $this->assertTrue($state['entities'][31]['has_shield']);
-        $this->assertTrue($state['entities'][32]['has_shield']);
+        $this->assertSame(1, $state['entities'][30]['has_shield']);
+        $this->assertSame(1, $state['entities'][20]['has_shield']);
+        $this->assertSame(0, $state['entities'][20]['shield_broken']);
+        $this->assertSame(1, $state['entities'][31]['has_shield']);
+        $this->assertSame(1, $state['entities'][32]['has_shield']);
         $this->assertSame('bossGrantShield', $events[0]['type']);
         $this->assertSame('bossSpawnMinion', $events[1]['type']);
         $this->assertSame('bossSpawnMinion', $events[2]['type']);
@@ -86,16 +86,80 @@ final class BossEngineTest extends TestCase
 
         $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
 
-        $this->assertTrue($state['entities'][20]['has_shield']);
-        $this->assertFalse($state['entities'][20]['shield_broken']);
-        $this->assertTrue($state['entities'][30]['has_shield']);
-        $this->assertFalse($state['entities'][30]['shield_broken']);
+        $this->assertSame(1, $state['entities'][20]['has_shield']);
+        $this->assertSame(0, $state['entities'][20]['shield_broken']);
+        $this->assertSame(1, $state['entities'][30]['has_shield']);
+        $this->assertSame(0, $state['entities'][30]['shield_broken']);
         $this->assertSame('bossGrantShield', $events[0]['type']);
         $this->assertContains(30, $events[0]['target_entity_ids']);
         $this->assertContains(20, $events[0]['target_entity_ids']);
     }
 
-    private function bossState(int $phase, array $monsters): array
+    public function testStrikerPhaseOneMovesThenHitsHeroesInArea(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $events = [];
+        $state = $this->bossState(1, $monsters, 'striker');
+        $state['entities'][10]['tile_id'] = 6;
+
+        $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
+
+        $this->assertSame(2, $state['entities'][30]['tile_id']);
+        $this->assertSame(8, $state['entities'][10]['health']);
+        $this->assertSame([
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 2],
+            ['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 8],
+        ], $events);
+    }
+
+    public function testStrikerPhaseTwoChargesBeforeMovingAndAreaAttack(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $events = [];
+        $state = $this->bossState(2, $monsters, 'striker');
+        $state['entities'][10]['tile_id'] = 2;
+
+        $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
+
+        $this->assertSame(5, $state['entities'][30]['tile_id']);
+        $this->assertSame(3, $state['entities'][10]['tile_id']);
+        $this->assertSame(7, $state['entities'][10]['health']);
+        $this->assertSame('monsterCharge', $events[0]['type']);
+        $this->assertSame(30, $events[0]['source_entity_id']);
+        $this->assertSame(10, $events[0]['target_entity_id']);
+        $this->assertSame(1, $events[0]['damage']);
+        $this->assertSame(3, $events[0]['push_tile_id']);
+        $this->assertSame(['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 5], $events[1]);
+        $this->assertSame(['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 7], $events[2]);
+    }
+
+    public function testStrikerPhaseThreeGrantsShieldThenChargesAndAreaAttacks(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $events = [];
+        $state = $this->bossState(3, $monsters, 'striker');
+        $state['entities'][10]['tile_id'] = 2;
+        $state['entities'][30]['has_shield'] = true;
+        $state['entities'][30]['shield_broken'] = true;
+
+        $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
+
+        $this->assertSame(1, $state['entities'][30]['has_shield']);
+        $this->assertSame(0, $state['entities'][30]['shield_broken']);
+        $this->assertSame(7, $state['entities'][10]['health']);
+        $this->assertSame('bossGrantShield', $events[0]['type']);
+        $this->assertSame('monsterCharge', $events[1]['type']);
+        $this->assertSame('monsterMove', $events[2]['type']);
+        $this->assertSame('monsterAttack', $events[3]['type']);
+    }
+
+    private function bossState(int $phase, array $monsters, string $bossKey = 'slasher'): array
     {
         return [
             'boss_spawn_seed' => 1,
@@ -111,7 +175,7 @@ final class BossEngineTest extends TestCase
             ],
             'entities' => [
                 10 => ['id' => 10, 'type' => 'hero', 'tile_id' => 4, 'health' => 10, 'state' => 'active'],
-                30 => ['id' => 30, 'type' => 'boss', 'boss_key' => 'slasher', 'phase' => $phase, 'monster_size' => 'boss', 'tile_id' => 1, 'health' => 9, 'state' => 'active'],
+                30 => ['id' => 30, 'type' => 'boss', 'boss_key' => $bossKey, 'phase' => $phase, 'monster_size' => 'boss', 'tile_id' => 1, 'health' => 9, 'state' => 'active'],
             ],
         ];
     }

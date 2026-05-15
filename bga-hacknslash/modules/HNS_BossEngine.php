@@ -72,7 +72,15 @@ final class HNS_BossEngine
         }
 
         $state = self::resolvePreActions($bossEntityId, $state, $phaseMaterial, $events);
+        if (($state['entities'][$bossEntityId]['state'] ?? 'active') !== 'active') {
+            return $state;
+        }
+
         $state = self::activateSpawnedMinions($state, $events);
+        if (($phaseMaterial['effect'] ?? null) === 'move_area_attack') {
+            return self::resolveMoveAreaAttack($bossEntityId, $state, $phaseMaterial, $events);
+        }
+
         $result = HNS_MonsterAi::activate($bossEntityId, $state, $phaseMaterial);
         array_push($events, ...$result['events']);
 
@@ -95,10 +103,218 @@ final class HNS_BossEngine
 
             if (($action['type'] ?? null) === 'spawn_minions') {
                 $state = self::spawnMinions($bossEntityId, $state, $action, $events);
+                continue;
+            }
+
+            if (($action['type'] ?? null) === 'charge') {
+                $result = HNS_MonsterAi::activate($bossEntityId, $state, [
+                    'effect' => 'charge',
+                    'damage' => (int) ($action['damage'] ?? 0),
+                    'range' => (int) ($action['range'] ?? 1),
+                    'range_metric' => $action['range_metric'] ?? 'orthogonal',
+                    'can_attack' => true,
+                    'can_move' => false,
+                    'can_attack_and_move' => false,
+                ]);
+                $state = $result['state'];
+                array_push($events, ...$result['events']);
             }
         }
 
         return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $phaseMaterial
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function resolveMoveAreaAttack(int $bossEntityId, array $state, array $phaseMaterial, array &$events): array
+    {
+        $targetHeroId = self::closestHeroId($bossEntityId, $state);
+        if ($targetHeroId === null) {
+            return $state;
+        }
+
+        if (($phaseMaterial['can_move'] ?? true) === true) {
+            $state = self::moveToward($bossEntityId, $targetHeroId, $state, $phaseMaterial, $events);
+        }
+
+        $bossTile = HNS_BoardRules::entityTile($state, $bossEntityId);
+        foreach (self::heroEntityIdsInArea($bossTile, $state, $phaseMaterial['area'] ?? [0, 0], $phaseMaterial['area_metric'] ?? 'chebyshev') as $heroEntityId) {
+            $damage = (int) ($phaseMaterial['damage'] ?? 0);
+            $state['entities'][$heroEntityId]['health'] = max(0, (int) $state['entities'][$heroEntityId]['health'] - $damage);
+            if ((int) $state['entities'][$heroEntityId]['health'] === 0) {
+                $state['entities'][$heroEntityId]['state'] = 'dead';
+            }
+            $events[] = [
+                'type' => 'monsterAttack',
+                'source_entity_id' => $bossEntityId,
+                'target_entity_id' => $heroEntityId,
+                'damage' => $damage,
+                'target_health' => (int) $state['entities'][$heroEntityId]['health'],
+            ];
+        }
+
+        return $state;
+    }
+
+    /** @param array<string, mixed> $state */
+    private static function closestHeroId(int $bossEntityId, array $state): ?int
+    {
+        $bossTile = HNS_BoardRules::entityTile($state, $bossEntityId);
+        $closestHeroId = null;
+        $closestDistance = PHP_INT_MAX;
+
+        foreach ($state['entities'] as $entityId => $entity) {
+            if (($entity['type'] ?? null) !== 'hero' || ($entity['state'] ?? 'active') !== 'active') {
+                continue;
+            }
+
+            $distance = HNS_BoardRules::distance($bossTile, HNS_BoardRules::entityTile($state, (int) $entityId));
+            if ($distance < $closestDistance || ($distance === $closestDistance && (int) $entityId < (int) ($closestHeroId ?? PHP_INT_MAX))) {
+                $closestDistance = $distance;
+                $closestHeroId = (int) $entityId;
+            }
+        }
+
+        return $closestHeroId;
+    }
+
+    /**
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $phaseMaterial
+     * @param array<int, array<string, mixed>> $events
+     * @return array<string, mixed>
+     */
+    private static function moveToward(int $bossEntityId, int $heroEntityId, array $state, array $phaseMaterial, array &$events): array
+    {
+        $steps = (int) ($phaseMaterial['move'] ?? 0);
+        if ($steps <= 0) {
+            return $state;
+        }
+
+        $from = HNS_BoardRules::entityTile($state, $bossEntityId);
+        $to = HNS_BoardRules::entityTile($state, $heroEntityId);
+        $tile = self::bestReachableTileToward($from, $to, $state, $bossEntityId, $phaseMaterial['move_metric'] ?? 'orthogonal', $steps);
+        if ($tile !== null && (int) $tile['id'] !== (int) $from['id']) {
+            $state['entities'][$bossEntityId]['tile_id'] = (int) $tile['id'];
+            $events[] = ['type' => 'monsterMove', 'source_entity_id' => $bossEntityId, 'target_tile_id' => (int) $tile['id']];
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $to
+     * @param array<string, mixed> $state
+     * @return array<string, mixed>|null
+     */
+    private static function bestReachableTileToward(array $from, array $to, array $state, int $movingEntityId, string $moveMetric, int $maxSteps): ?array
+    {
+        $distanceFn = $moveMetric === 'chebyshev'
+            ? static fn (array $left, array $right): int => HNS_BoardRules::diagonalDistance($left, $right)
+            : static fn (array $left, array $right): int => HNS_BoardRules::distance($left, $right);
+        $bestTile = null;
+        $bestDistance = $distanceFn($from, $to);
+        $bestSteps = PHP_INT_MAX;
+
+        foreach (self::reachableTilesBySteps($from, $state, $movingEntityId, $moveMetric, $maxSteps) as $tileId => $steps) {
+            $tile = $state['tiles'][$tileId];
+            $distance = $distanceFn($tile, $to);
+            if ($distance < $bestDistance || ($distance === $bestDistance && ($steps < $bestSteps || ($steps === $bestSteps && (int) $tile['id'] < (int) ($bestTile['id'] ?? PHP_INT_MAX))))) {
+                $bestDistance = $distance;
+                $bestSteps = $steps;
+                $bestTile = $tile;
+            }
+        }
+
+        return $bestTile;
+    }
+
+    /**
+     * @param array<string, mixed> $from
+     * @param array<string, mixed> $state
+     * @return array<int, int>
+     */
+    private static function reachableTilesBySteps(array $from, array $state, int $movingEntityId, string $moveMetric, int $maxSteps): array
+    {
+        $queue = [(int) $from['id']];
+        $stepsByTileId = [(int) $from['id'] => 0];
+
+        for ($index = 0; $index < count($queue); $index++) {
+            $tileId = $queue[$index];
+            $steps = $stepsByTileId[$tileId];
+            if ($steps >= $maxSteps) {
+                continue;
+            }
+
+            foreach (self::neighboursForMoveMetric($state['tiles'][$tileId], $state['tiles'], $moveMetric) as $tile) {
+                $nextTileId = (int) $tile['id'];
+                if (isset($stepsByTileId[$nextTileId]) || !HNS_BoardRules::isTileWalkable($tile)) {
+                    continue;
+                }
+                if (!HNS_BoardRules::canEnterTile($nextTileId, $state['entities'], $state['entities'][$movingEntityId], $movingEntityId)) {
+                    continue;
+                }
+
+                $stepsByTileId[$nextTileId] = $steps + 1;
+                $queue[] = $nextTileId;
+            }
+        }
+
+        unset($stepsByTileId[(int) $from['id']]);
+
+        return $stepsByTileId;
+    }
+
+    /**
+     * @param array<string, mixed> $tile
+     * @param array<int, array<string, mixed>> $tiles
+     * @return array<int, array<string, mixed>>
+     */
+    private static function neighboursForMoveMetric(array $tile, array $tiles, string $moveMetric): array
+    {
+        $neighbours = [];
+        foreach ($tiles as $candidate) {
+            $distance = $moveMetric === 'chebyshev'
+                ? HNS_BoardRules::diagonalDistance($tile, $candidate)
+                : HNS_BoardRules::distance($tile, $candidate);
+            if ($distance === 1) {
+                $neighbours[] = $candidate;
+            }
+        }
+
+        return $neighbours;
+    }
+
+    /**
+     * @param array<string, mixed> $centerTile
+     * @param array<string, mixed> $state
+     * @param array{0:int, 1:int} $area
+     * @return array<int, int>
+     */
+    private static function heroEntityIdsInArea(array $centerTile, array $state, array $area, string $areaMetric): array
+    {
+        $heroIds = [];
+        foreach ($state['entities'] as $entityId => $entity) {
+            if (($entity['type'] ?? null) !== 'hero' || ($entity['state'] ?? 'active') !== 'active') {
+                continue;
+            }
+
+            $tile = HNS_BoardRules::entityTile($state, (int) $entityId);
+            $inArea = $areaMetric === 'chebyshev'
+                ? HNS_BoardRules::isInDiagonalRange($centerTile, $tile, $area)
+                : HNS_BoardRules::isInOrthogonalRange($centerTile, $tile, $area);
+            if ($inArea) {
+                $heroIds[] = (int) $entityId;
+            }
+        }
+        sort($heroIds);
+
+        return $heroIds;
     }
 
     /**
@@ -146,12 +362,8 @@ final class HNS_BossEngine
                 continue;
             }
 
-            if (($entity['shield_broken'] ?? false) === false && ($entity['has_shield'] ?? false) === true) {
-                continue;
-            }
-
-            $entity['has_shield'] = true;
-            $entity['shield_broken'] = false;
+            $entity['has_shield'] = 1;
+            $entity['shield_broken'] = 0;
             $shielded[] = (int) $entityId;
         }
 
@@ -193,8 +405,8 @@ final class HNS_BossEngine
                 'damage' => $material['damage'] ?? 0,
             ];
             if (in_array('shield', $state['level_monster_abilities'] ?? [], true)) {
-                $state['entities'][$entityId]['has_shield'] = true;
-                $state['entities'][$entityId]['shield_broken'] = false;
+                $state['entities'][$entityId]['has_shield'] = 1;
+                $state['entities'][$entityId]['shield_broken'] = 0;
             }
             $state['_boss_spawned_entity_ids'][] = $entityId;
             $events[] = ['type' => 'bossSpawnMinion', 'source_entity_id' => $bossEntityId, 'summoned_entity_id' => $entityId, 'monster_id' => $monsterId, 'target_tile_id' => (int) $tile['id']];
