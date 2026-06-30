@@ -3,6 +3,7 @@
 This is the initial BoardGameArena structure for HackNSlash.
 
 It provides:
+
 - BGA entry files: PHP game/action/view, JS, CSS, template.
 - Database tables for cards, dungeon tiles, entities, and global variables.
 - A minimal state machine: player turn, action resolution, next player, game end.
@@ -28,10 +29,10 @@ This section records clarified rules as they are provided, so the implementation
 - Each level number determines how many monster slots are filled: level `1` has `1` monster on slot `1`, level `2` fills slots `1` and `2`, and so on through level `7`. Level `8` is the boss level.
 - Bosses have `3` phases. When a boss reaches `0` HP, all current actions are interrupted, the boss immediately takes its turn, then advances to the next phase. When the third phase is defeated, the game ends in victory.
 - There are two bosses: Slasher and Striker. Slasher is generally the first boss encountered. Slasher phase 1 has `8` HP, moves `2` tiles with diagonals, and deals `2` melee damage.
-- Slasher phase 2 spawns `2` minions (goblins or slimes) before doing its movement and attack action. Slasher phase 3 casts Shield / Bouclier on all creatures, then spawns minions, then attacks. Creatures cannot have multiple shields.
+- Slasher phase 2 spawns `2` minions (goblins or slime) before doing its movement and attack action. Slasher phase 3 casts Shield / Bouclier on all creatures, then spawns minions, then attacks. Creatures cannot have multiple shields.
 - Each monster has a specific AI profile. The default AI is simple: if it can attack, it attacks; otherwise it moves toward the closest player. Some monsters can attack and move in the same activation, and some monsters cannot move.
 - Goblins always arrive in pairs. Each goblin has `1` HP, attacks orthogonally for `1` damage, and otherwise moves orthogonally by `1` tile.
-- Slimes arrive in pairs. Each slime has `2` HP, moves up to `2` tiles diagonally, and sticks heroes at orthogonal range `1`.
+- Slime arrive in pairs. Each slime has `2` HP, moves up to `2` tiles diagonally, and sticks heroes at orthogonal range `1`.
 - Evil Eye does not move. It shoots at range `3`, diagonals included, for `1` damage.
 - Kamikaze has `1` HP, moves `1` tile diagonally, and explodes when orthogonal to a hero or when it dies. Its explosion deals `2` damage around itself orthogonally.
 - Wizard has `2` HP, attacks orthogonally at range `1-4` for `1` damage, does not attack at range `0`, and otherwise moves `1` tile orthogonally.

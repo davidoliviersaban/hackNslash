@@ -66,6 +66,9 @@
     "power_taken_point_blank_1": { "id": 74, "name": "Point blank 1 taken", "type": "int" },
     "power_taken_point_blank_2": { "id": 75, "name": "Point blank 2 taken", "type": "int" },
     "power_taken_point_blank_3": { "id": 76, "name": "Point blank 3 taken", "type": "int" },
+    "power_taken_reinforce_1": { "id": 118, "name": "Renforcement 1 taken", "type": "int" },
+    "power_taken_reinforce_2": { "id": 119, "name": "Renforcement 2 taken", "type": "int" },
+    "power_taken_reinforce_3": { "id": 120, "name": "Renforcement 3 taken", "type": "int" },
 
     "power_played_attack": { "id": 77, "name": "Attack played", "type": "int" },
     "power_played_strike": { "id": 78, "name": "Strike played", "type": "int" },
@@ -107,6 +110,9 @@
     "power_played_quick_shot_3": { "id": 114, "name": "Quick shot 3 played", "type": "int" },
     "power_played_point_blank_1": { "id": 115, "name": "Point blank 1 played", "type": "int" },
     "power_played_point_blank_2": { "id": 116, "name": "Point blank 2 played", "type": "int" },
-    "power_played_point_blank_3": { "id": 117, "name": "Point blank 3 played", "type": "int" }
+    "power_played_point_blank_3": { "id": 117, "name": "Point blank 3 played", "type": "int" },
+    "power_played_reinforce_1": { "id": 121, "name": "Renforcement 1 played", "type": "int" },
+    "power_played_reinforce_2": { "id": 122, "name": "Renforcement 2 played", "type": "int" },
+    "power_played_reinforce_3": { "id": 123, "name": "Renforcement 3 played", "type": "int" }
   }
 }

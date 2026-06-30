@@ -42,15 +42,15 @@ final class HNS_GameEngine
 
         $abilities = [];
         $enchantment = $enchantmentDeck[0] ?? null;
-        if ($enchantment === 'shield') {
-            $abilities[] = 'shield';
+        if ($enchantment === 'shielded') {
+            $abilities[] = 'shielded';
             foreach ($entities as &$entity) {
                 $entity['has_shield'] = true;
                 $entity['shield_broken'] = false;
             }
         }
-        if ($enchantment === 'thorns') {
-            $abilities[] = 'thorns';
+        if ($enchantment === 'spiky') {
+            $abilities[] = 'spiky';
         }
 
         return [

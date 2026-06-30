@@ -43,10 +43,12 @@ final class SetupTest extends TestCase
         $this->assertStringContainsString('private const HNS_BOSS_FIGHT_POWER_COUNT = 2;', $setupSource);
         $this->assertStringContainsString('shuffle($powerKeys);', $setupSource);
         $this->assertStringContainsString('$startLevel = $scenario === HNS_SCENARIO_BOSS_FIGHT ? HNS_BOSS_LEVEL : $this->startingDungeonLevelForPlayerCount(count($players));', $gameSource);
+        $this->assertStringContainsString('bossFightStartingPowersByPlayer(array_keys($players))', $gameSource);
         $this->assertStringContainsString('startingDungeonLevelForPlayerCount', $gameSource);
         $this->assertStringContainsString('return $playerCount >= 2 ? 3 : HNS_FIRST_LEVEL;', $gameSource);
         $this->assertStringContainsString('$startingHealth = $this->startingHealthForDifficulty($difficulty);', $gameSource);
         $this->assertStringContainsString('saveGameContext($scenario, $difficulty)', $gameSource);
+        $this->assertStringContainsString('saveStartingLevel($startLevel)', $gameSource);
     }
 
     public function testSetupUsesGeneratedLevelAndPersistsMonsterAbilities(): void
@@ -148,9 +150,11 @@ final class SetupTest extends TestCase
     {
         $setupSource = self::readFile(dirname(__DIR__) . '/modules/HNS_Setup.php');
 
-        $this->assertStringContainsString('protected function drawLevelEnchantments(int $level): array', $setupSource);
-        $this->assertStringContainsString('$cycle = [\'shield\', \'thorns\', null];', $setupSource);
-        $this->assertStringContainsString('drawLevelEnchantments($level)', $setupSource);
+        $this->assertStringContainsString('protected function drawLevelEnchantments(int $level, int $startingLevel = HNS_FIRST_LEVEL): array', $setupSource);
+        $this->assertStringContainsString('$upgradeCount = max(0, $level - $startingLevel);', $setupSource);
+        $this->assertStringContainsString('$upgradeCount < 2', $setupSource);
+        $this->assertStringContainsString('$cycle = [\'shielded\', \'spiky\', null];', $setupSource);
+        $this->assertStringContainsString('drawLevelEnchantments($level, $this->currentStartingLevel())', $setupSource);
     }
 
     public function testLevelEnchantmentCycle(): void
@@ -162,14 +166,24 @@ final class SetupTest extends TestCase
             use HNS_Setup {
                 drawLevelEnchantments as public;
             }
+
+            protected function currentStartingLevel(): int
+            {
+                return HNS_FIRST_LEVEL;
+            }
         };
 
         $this->assertSame([], $setup->drawLevelEnchantments(1));
-        $this->assertSame(['shield'], $setup->drawLevelEnchantments(2));
-        $this->assertSame(['thorns'], $setup->drawLevelEnchantments(3));
-        $this->assertSame([], $setup->drawLevelEnchantments(4));
-        $this->assertSame(['shield'], $setup->drawLevelEnchantments(5));
-        $this->assertSame(['thorns'], $setup->drawLevelEnchantments(6));
+        $this->assertSame([], $setup->drawLevelEnchantments(2));
+        $this->assertSame(['shielded'], $setup->drawLevelEnchantments(3));
+        $this->assertSame(['spiky'], $setup->drawLevelEnchantments(4));
+        $this->assertSame([], $setup->drawLevelEnchantments(5));
+        $this->assertSame(['shielded'], $setup->drawLevelEnchantments(6));
+        $this->assertSame([], $setup->drawLevelEnchantments(3, 3));
+        $this->assertSame([], $setup->drawLevelEnchantments(4, 3));
+        $this->assertSame(['shielded'], $setup->drawLevelEnchantments(5, 3));
+        $this->assertSame(['spiky'], $setup->drawLevelEnchantments(6, 3));
+        $this->assertSame([], $setup->drawLevelEnchantments(7, 3));
         $this->assertSame([], $setup->drawLevelEnchantments(HNS_BOSS_LEVEL));
     }
 
@@ -198,6 +212,37 @@ final class SetupTest extends TestCase
         $this->assertCount(3, array_unique($powers));
         foreach (array_slice($powers, 1) as $powerKey) {
             $this->assertArrayHasKey($powerKey, $bonus_cards);
+            $this->assertSame(3, (int) $bonus_cards[$powerKey]['rank']);
+        }
+    }
+
+    public function testBossFightStartingPowersDifferBetweenTwoPlayers(): void
+    {
+        require_once dirname(__DIR__) . '/modules/HNS_Setup.php';
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $setup = new class($bonus_cards) {
+            use HNS_Setup {
+                bossFightStartingPowersByPlayer as public;
+            }
+
+            public array $bonus_cards;
+
+            public function __construct(array $bonusCards)
+            {
+                $this->bonus_cards = $bonusCards;
+            }
+        };
+
+        $hands = $setup->bossFightStartingPowersByPlayer([11, 22]);
+        $this->assertArrayHasKey(11, $hands);
+        $this->assertArrayHasKey(22, $hands);
+        $this->assertSame('strike', $hands[11][0]);
+        $this->assertSame('strike', $hands[22][0]);
+        $this->assertCount(3, $hands[11]);
+        $this->assertCount(3, $hands[22]);
+        $this->assertSame([], array_values(array_intersect(array_slice($hands[11], 1), array_slice($hands[22], 1))));
+        foreach (array_merge(array_slice($hands[11], 1), array_slice($hands[22], 1)) as $powerKey) {
             $this->assertSame(3, (int) $bonus_cards[$powerKey]['rank']);
         }
     }

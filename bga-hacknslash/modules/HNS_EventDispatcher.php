@@ -79,6 +79,7 @@ trait HNS_EventDispatcher
                 'afterMove' => '',
                 'afterDash' => '',
                 'afterDashAttack' => '',
+                'reinforceNextCard' => '',
                 'afterKill' => '',
                 'afterPushOrPull' => '',
                 'entityDamaged' => '',

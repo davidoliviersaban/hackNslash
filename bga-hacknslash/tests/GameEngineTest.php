@@ -30,13 +30,13 @@ final class GameEngineTest extends TestCase
 
     public function testCreateLevelDrawsMonstersForLevelSlotsAndAppliesEnchantment(): void
     {
-        $state = HNS_GameEngine::createLevel(2, 123, $this->monsters, array_keys($this->monsters), ['shield']);
+        $state = HNS_GameEngine::createLevel(2, 123, $this->monsters, array_keys($this->monsters), ['shielded']);
 
         $this->assertFalse($state['is_boss_level']);
         $this->assertCount(2, $state['monster_slots']);
         $this->assertNotEmpty($state['tiles']);
         $this->assertNotEmpty($state['entities']);
-        $this->assertSame(['shield'], $state['level_monster_abilities']);
+        $this->assertSame(['shielded'], $state['level_monster_abilities']);
 
         foreach ($state['entities'] as $entity) {
             $this->assertTrue($entity['has_shield'] ?? false);

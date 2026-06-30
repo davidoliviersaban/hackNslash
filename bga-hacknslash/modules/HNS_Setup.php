@@ -39,7 +39,7 @@ trait HNS_Setup
     protected function setupInitialBoard(int $level): void
     {
         $seed = random_int(1, PHP_INT_MAX);
-        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments($level), $this->bosses ?? []);
+        $levelState = HNS_GameEngine::createLevel($level, $seed, $this->monsters, array_keys($this->monsters), $this->drawLevelEnchantments($level, $this->currentStartingLevel()), $this->bosses ?? []);
 
         $abilities = $this->hns_sql_escape((string) json_encode($levelState['level_monster_abilities']));
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('level_seed', '$seed')");
@@ -97,14 +97,15 @@ trait HNS_Setup
     }
 
     /** @return array<int, string> */
-    protected function drawLevelEnchantments(int $level): array
+    protected function drawLevelEnchantments(int $level, int $startingLevel = HNS_FIRST_LEVEL): array
     {
-        if ($level <= HNS_FIRST_LEVEL || $level >= HNS_BOSS_LEVEL) {
+        $upgradeCount = max(0, $level - $startingLevel);
+        if ($upgradeCount < 2 || $level >= HNS_BOSS_LEVEL) {
             return [];
         }
 
-        $cycle = ['shield', 'thorns', null];
-        $enchantment = $cycle[($level - HNS_FIRST_LEVEL - 1) % count($cycle)];
+        $cycle = ['shielded', 'spiky', null];
+        $enchantment = $cycle[($upgradeCount - 2) % count($cycle)];
 
         return $enchantment === null ? [] : [$enchantment];
     }
@@ -126,7 +127,7 @@ trait HNS_Setup
             $this->DbQuery("UPDATE player SET player_health = $health, player_action_points = $actionPoints, player_main_action_available = 1 WHERE player_id = $playerId");
             $this->DbQuery("INSERT INTO entity (entity_type, entity_owner, entity_tile_id, entity_health) VALUES ('hero', $playerId, $tileId, $health)");
             $this->syncPlayerPositionFromTile($playerId, $tileId);
-            $this->initializePlayerPowers($playerId, $powerKeys);
+            $this->initializePlayerPowers($playerId, $powerKeys[$playerId] ?? $powerKeys);
         }
     }
 
@@ -206,6 +207,34 @@ trait HNS_Setup
         shuffle($powerKeys);
 
         return ['strike', ...array_slice($powerKeys, 0, self::HNS_BOSS_FIGHT_POWER_COUNT)];
+    }
+
+    /**
+     * @param array<int|string> $playerIds
+     * @return array<int, list<string>>
+     */
+    protected function bossFightStartingPowersByPlayer(array $playerIds): array
+    {
+        $rankThreePowers = array_values(array_filter(array_keys($this->bonus_cards), function (string $powerKey): bool {
+            return (int) ($this->bonus_cards[$powerKey]['rank'] ?? 0) === 3;
+        }));
+        shuffle($rankThreePowers);
+
+        $hands = [];
+        $cursor = 0;
+        foreach (array_values($playerIds) as $playerId) {
+            $powers = [];
+            for ($i = 0; $i < self::HNS_BOSS_FIGHT_POWER_COUNT; $i++) {
+                if ($rankThreePowers === []) {
+                    break;
+                }
+                $powers[] = $rankThreePowers[$cursor % count($rankThreePowers)];
+                $cursor++;
+            }
+            $hands[(int) $playerId] = ['strike', ...$powers];
+        }
+
+        return $hands;
     }
 
     protected function initializePlayerPowers(int $playerId, ?array $powerKeys = null): void

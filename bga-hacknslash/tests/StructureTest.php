@@ -108,6 +108,10 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('recordFinalCombo', $game);
         $this->assertStringContainsString('currentFinalComboSnapshot', $game);
         $this->assertStringContainsString('ensureFinalComboTable', $game);
+        $this->assertStringNotContainsString('CREATE TABLE IF NOT EXISTS final_combo', $game);
+        $this->assertStringNotContainsString('CREATE TABLE IF NOT EXISTS power_history', $game);
+        $this->assertStringNotContainsString('CREATE TABLE IF NOT EXISTS win_streak', $game);
+        $this->assertStringContainsString('Avoid runtime DDL on BGA tables', $game);
         $this->assertStringContainsString('final_combo', $game);
         $this->assertStringContainsString('finalComboAggregates', $game);
         $this->assertStringContainsString('currentScenarioKey', $game);
@@ -327,6 +331,21 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('grid-template-columns: repeat(2, minmax(96px, 1fr));', $css);
     }
 
+    public function testMobileLayoutOrdersBoardHeroAndMonsters(): void
+    {
+        $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
+        $mobile = substr($css, strpos($css, '@media (max-width: 860px)'), strpos($css, '@media (max-width: 640px)') - strpos($css, '@media (max-width: 860px)'));
+
+        $this->assertStringContainsString('#hns_center', $mobile);
+        $this->assertStringContainsString('display: contents;', $mobile);
+        $this->assertStringContainsString('#hns_main', $mobile);
+        $this->assertStringContainsString('order: 1;', $mobile);
+        $this->assertStringContainsString('#hns_side', $mobile);
+        $this->assertStringContainsString('order: 2;', $mobile);
+        $this->assertStringContainsString('#hns_monster_panel', $mobile);
+        $this->assertStringContainsString('order: 3;', $mobile);
+    }
+
     public function testClientMovesEntitiesFromEngineMoveEvents(): void
     {
         $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
@@ -407,17 +426,61 @@ final class StructureTest extends TestCase
         $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
 
         $this->assertStringContainsString('highlightFreeMoveTiles', $js);
+        $this->assertStringContainsString('highlightMoveTiles', $js);
+        $this->assertStringContainsString('scheduleMoveHighlight', $js);
         $this->assertStringContainsString('scheduleFreeMoveHighlight', $js);
         $this->assertStringContainsString('canActivePlayerMove', $js);
         $this->assertStringContainsString('isHeroHeldBySlime', $js);
         $this->assertStringContainsString('GameRules.isHeroHeldBySlime(hero, tiles, entities)', $js);
         $this->assertStringContainsString("parseInt(entity.type_arg || 0, 10) !== SLIME_TYPE_ARG", $js);
         $this->assertStringContainsString('parseInt(player.free_move_available || 0, 10) === 1', $js);
+        $highlightMoveTiles = substr($js, strpos($js, 'highlightMoveTiles: function'), strpos($js, 'scheduleMoveHighlight: function') - strpos($js, 'highlightMoveTiles: function'));
+        $this->assertStringContainsString('args = args || {};', $highlightMoveTiles);
+        $this->assertStringNotContainsString('gamedatas.gamestate.args', $highlightMoveTiles);
+        $canActivePlayerMove = substr($js, strpos($js, 'canActivePlayerMove: function'), strpos($js, 'clearFreeMoveHighlights: function') - strpos($js, 'canActivePlayerMove: function'));
+        $this->assertStringNotContainsString('action_points', $canActivePlayerMove);
+        $this->assertStringContainsString('return this.isLocalFreeMoveAvailable(args);', $canActivePlayerMove);
         $this->assertStringContainsString('clearFreeMoveHighlights', $js);
         $this->assertStringContainsString('isFreeMoveTile', $js);
         $this->assertStringContainsString('hns_free_move_tile', $js);
+        $this->assertStringContainsString('hns_paid_move_tile', $js);
+        $this->assertStringContainsString("hasFreeMove ? 'hns_free_move_tile' : 'hns_paid_move_tile'", $js);
         $this->assertStringContainsString('.hns_tile.hns_free_move_tile', $css);
-        $this->assertStringNotContainsString('.hns_tile.hns_free_move_tile::after', $css);
+        $this->assertStringContainsString('.hns_tile.hns_paid_move_tile', $css);
+        $this->assertStringContainsString('.hns_tile.hns_free_move_tile::after', $css);
+        $this->assertStringNotContainsString('.hns_tile.hns_paid_move_tile::after', $css);
+        $this->assertStringContainsString('--hns-green-overlay', $css);
+        $this->assertStringContainsString('hns_free_move_tile_pulse', $css);
+    }
+
+    public function testClientUsesLocalPlayerForMultiactiveActions(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $renderPowerCards = substr($js, strpos($js, 'renderPowerCards: function'), strpos($js, 'renderRewardOffer: function') - strpos($js, 'renderPowerCards: function'));
+        $highlightFreeMoveTiles = substr($js, strpos($js, 'highlightMoveTiles: function'), strpos($js, 'scheduleMoveHighlight: function') - strpos($js, 'highlightMoveTiles: function'));
+        $highlightPowerTargets = substr($js, strpos($js, 'highlightPowerTargets: function'), strpos($js, 'highlightPotentialPowerArea: function') - strpos($js, 'highlightPowerTargets: function'));
+        $actionButtons = substr($js, strpos($js, 'onUpdateActionButtons: function'), strpos($js, 'onSkipReward:') - strpos($js, 'onUpdateActionButtons: function'));
+
+        $this->assertStringContainsString('getLocalActionPlayerId', $js);
+        $this->assertStringContainsString('getLocalActionPlayer', $js);
+        $this->assertStringContainsString('isLocalFreeMoveAvailable', $js);
+        $this->assertStringContainsString('isLocalMainActionAvailable', $js);
+        $this->assertStringContainsString('var activePlayerId = this.getLocalActionPlayerId();', $renderPowerCards);
+        $this->assertStringContainsString('this.getHeroEntityForPlayer(this.getLocalActionPlayerId())', $highlightFreeMoveTiles);
+        $this->assertStringContainsString('this.getHeroEntityForPlayer(this.getLocalActionPlayerId())', $highlightPowerTargets);
+        $this->assertStringContainsString('this.isLocalFreeMoveAvailable(args)', $actionButtons);
+        $this->assertStringContainsString('this.isLocalMainActionAvailable(args)', $actionButtons);
+    }
+
+    public function testClientOffsetsStackedEntitiesOnSameTile(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $stackOrder = substr($js, strpos($js, 'updateEntityStackOrder: function'), strpos($js, 'updateAllEntityStackOrders: function') - strpos($js, 'updateEntityStackOrder: function'));
+
+        $this->assertStringContainsString('function entityStackOffset', $js);
+        $this->assertStringContainsString('entityStackOffset(i, stacked.length)', $stackOrder);
+        $this->assertStringContainsString('setNodePosition(node, centerLeft + offset.left, centerTop + offset.top)', $stackOrder);
+        $this->assertStringContainsString('setNodePosition(singleNode, singleBox.left + (singleBox.width / 2), singleBox.top + (singleBox.height / 2))', $stackOrder);
     }
 
     public function testClientHighlightsPowerTargetsAndValidatesVortexSelection(): void
@@ -522,7 +585,10 @@ final class StructureTest extends TestCase
         $this->assertNotFalse($multiAttackPosition);
         $this->assertNotFalse($requiresConfirmPosition);
         $this->assertStringContainsString("this.isSelectedPowerDashAttack()", $js);
-        $this->assertStringContainsString('!$shouldEndTurn', $game);
+        $playCard = substr($game, strpos($game, 'public function actPlayCard'), strpos($game, 'private function consumeActivePlayerMainActionPoint') - strpos($game, 'public function actPlayCard'));
+        $this->assertStringContainsString('if (!$bossPhaseStarted && !$gameWon)', $playCard);
+        $this->assertStringContainsString('$this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey, $newPlaysRemaining);', $playCard);
+        $this->assertStringNotContainsString('if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon)', $playCard);
         $this->assertStringContainsString('$this->nextStateAfterHeroAction($playerId);', $game);
         $this->assertStringContainsString("\$this->gamestate->setPlayerNonMultiactive(\$playerId, 'roundEnd');", $game);
     }
@@ -558,9 +624,24 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('notif_roundStarted', $js);
         $this->assertStringContainsString('this.gamedatas.players = args.players', $js);
         $this->assertStringContainsString("'entities' => \$this->getEntities()", $player);
-        $this->assertStringContainsString('this.gamedatas.entities = args.entities', $js);
-        $this->assertStringContainsString('this.renderBoard(this.gamedatas.tiles || {}, this.gamedatas.entities)', $js);
-        $this->assertStringContainsString('this.scheduleFreeMoveHighlight()', $js);
+        $this->assertStringNotContainsString('this.gamedatas.entities = args.entities', $js);
+        $this->assertStringContainsString('syncBoardEntities', $js);
+        $this->assertStringContainsString('this.syncBoardEntities(args.entities);', $js);
+        $this->assertStringContainsString('this.scheduleMoveHighlight()', $js);
+    }
+
+    public function testClientAvoidsDestructiveRefreshOnStateAndRoundUpdates(): void
+    {
+        $js = self::readFile(dirname(__DIR__) . '/hacknslash.js');
+        $onEnteringState = substr($js, strpos($js, 'onEnteringState: function'), strpos($js, 'onLeavingState: function') - strpos($js, 'onEnteringState: function'));
+        $roundStarted = substr($js, strpos($js, 'notif_roundStarted: function'), strpos($js, '// ----- Animation -----') - strpos($js, 'notif_roundStarted: function'));
+
+        $this->assertStringNotContainsString('this.renderHeroPanels();', $onEnteringState);
+        $this->assertStringNotContainsString('this.renderPowerCards();', $onEnteringState);
+        $this->assertStringNotContainsString('this.renderBoard(', $roundStarted);
+        $this->assertStringNotContainsString("dojo.empty('hns_cards')", $js);
+        $this->assertStringNotContainsString("dojo.empty('hns_monster_cards')", $js);
+        $this->assertStringContainsString('syncBoardEntities', $js);
     }
 
     public function testFreeActionsUsePersistedEventChain(): void
@@ -617,6 +698,11 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('this.syncRewardForCurrentPlayer(stateArgs)', $js);
         $this->assertStringContainsString('this.applyRewardMapsFromEvent(event)', $js);
         $this->assertStringContainsString('this.rewardOffer = this.rewardOffersByPlayer[this.player_id] || source.reward_offer || []', $js);
+        $this->assertStringContainsString('$sharedOffer = HNS_LevelReward::drawOfferForPlayer', $game);
+        $this->assertStringContainsString('$offers[(int) $player[\'id\']] = $sharedOffer;', $game);
+        $this->assertStringContainsString('removePowerFromRewardOffers', $game);
+        $this->assertStringContainsString('$this->removePowerFromRewardOffers($chosenPowerKey);', $game);
+        $this->assertStringContainsString('array_filter(', $game);
     }
 
     public function testSkippingRewardOnlyClearsThatPlayersClientReward(): void
@@ -821,17 +907,20 @@ final class StructureTest extends TestCase
         $this->assertStringContainsString('slimed', $js);
         $this->assertStringContainsString('clearExpiredSlimeStatuses', $js);
         $this->assertStringContainsString('this.clearExpiredSlimeStatuses();', $js);
-        $this->assertStringContainsString('this.scheduleFreeMoveHighlight();', $js);
+        $this->assertStringContainsString('this.scheduleMoveHighlight();', $js);
+        $playCard = substr($game, strpos($game, 'public function actPlayCard'), strpos($game, 'private function consumeActivePlayerMainActionPoint') - strpos($game, 'public function actPlayCard'));
+        $this->assertStringContainsString('$this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey, $newPlaysRemaining);', $playCard);
+        $this->assertStringNotContainsString('if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon)', $playCard);
         $this->assertStringContainsString('tiles/markers/slimed.webp', $js);
-        $this->assertStringContainsString('tiles/markers/shield.webp', $js);
+        $this->assertStringContainsString('tiles/markers/shielded.webp', $js);
         $this->assertStringContainsString('hns_entity_effects', $js);
         $this->assertStringContainsString('hns_entity_shield_icon', $js);
         $this->assertStringContainsString('hns_entity_shielded', $js);
-        $this->assertStringContainsString('hns_entity_thorns', $js);
-        $this->assertStringContainsString('hns_entity_thorns_icon', $js);
-        $this->assertStringContainsString('tiles/markers/thorns.webp', $js);
-        $this->assertStringContainsString('hasThorns', $js);
-        $this->assertStringContainsString("indexOf('thorns') !== -1", $js);
+        $this->assertStringContainsString('hns_entity_spiky', $js);
+        $this->assertStringContainsString('hns_entity_spiky_icon', $js);
+        $this->assertStringContainsString('tiles/markers/spiky.webp', $js);
+        $this->assertStringContainsString('hasSpiky', $js);
+        $this->assertStringContainsString("indexOf('spiky') !== -1", $js);
         $this->assertStringContainsString('this.intFlag(entity.has_shield) === 1', $js);
         $this->assertStringContainsString('this.intFlag(entity.shield_broken) !== 1', $js);
         $this->assertStringContainsString('intFlag: function (value)', $js);
@@ -850,12 +939,25 @@ final class StructureTest extends TestCase
         $css = self::readFile(dirname(__DIR__) . '/hacknslash.css');
         $this->assertStringContainsString('.hns_entity_shield_icon', $css);
         $this->assertStringContainsString('.hns_entity_shielded', $css);
-        $this->assertStringContainsString('.hns_entity_thorns', $css);
-        $this->assertStringContainsString('.hns_entity .hns_entity_thorns_icon', $css);
+        $this->assertStringContainsString('.hns_entity_spiky', $css);
+        $this->assertStringContainsString('.hns_entity .hns_entity_spiky_icon', $css);
         $this->assertStringContainsString('rgba(128, 76, 36', $css);
         $this->assertStringContainsString('isActivePlayerMoveAvailable', $game);
+        $isLocalFreeMoveAvailable = substr($js, strpos($js, 'isLocalFreeMoveAvailable: function'), strpos($js, 'isLocalMainActionAvailable: function') - strpos($js, 'isLocalFreeMoveAvailable: function'));
+        $this->assertStringNotContainsString('action_points', $isLocalFreeMoveAvailable);
         $this->assertStringContainsString('parseInt(player.action_points || 0, 10) > 0', $js);
-        $this->assertStringContainsString("var actionPoints = (player.action_points || 0) + '/' + maxActionPoints;", $js);
+        $this->assertStringContainsString('renderHealthIcons', $js);
+        $this->assertStringContainsString('hns_heart_full', $js);
+        $this->assertStringContainsString('hns_heart_lost', $js);
+        $this->assertStringContainsString('renderActionPoints', $js);
+        $this->assertStringContainsString('hns_ap_value', $js);
+        $this->assertStringContainsString('hns_hero_free_move', $js);
+        $this->assertStringContainsString('player.max_health', $js);
+        $this->assertStringContainsString('max_health', self::readFile(dirname(__DIR__) . '/modules/HNS_Player.php'));
+        $this->assertStringContainsString('.hns_heart_lost', $css);
+        $this->assertStringContainsString('.hns_hero_ap', $css);
+        $this->assertStringContainsString('.hns_hero_free_move.hns_available', $css);
+        $this->assertStringContainsString('.hns_hero_free_move.hns_spent', $css);
         $this->assertStringNotContainsString("compact ? '-'", $js);
     }
 

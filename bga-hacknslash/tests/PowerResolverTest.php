@@ -276,10 +276,10 @@ final class PowerResolverTest extends TestCase
         HNS_PowerResolver::resolve('point_blank_1', 10, ['target_entity_id' => 30], $state, $this->powers);
     }
 
-    public function testThornsDamageHeroWhenAttackingOrthogonallyAdjacentMonster(): void
+    public function testSpikyDamageHeroWhenAttackingOrthogonallyAdjacentMonster(): void
     {
         $state = $this->state;
-        $state['level_monster_abilities'] = ['thorns'];
+        $state['level_monster_abilities'] = ['spiky'];
 
         $result = HNS_PowerResolver::resolve('attack', 10, ['target_entity_id' => 20], $state, $this->powers);
 
@@ -288,14 +288,14 @@ final class PowerResolverTest extends TestCase
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'attack'],
             ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1],
             ['type' => 'entityDamaged', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1, 'target_health' => 9],
-            ['type' => 'thornsDamage', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
+            ['type' => 'spikyDamage', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
         ], $result['events']);
     }
 
-    public function testThornsDoNotDamageHeroWhenAttackingDiagonally(): void
+    public function testSpikyDoNotDamageHeroWhenAttackingDiagonally(): void
     {
         $state = $this->state;
-        $state['level_monster_abilities'] = ['thorns'];
+        $state['level_monster_abilities'] = ['spiky'];
 
         $result = HNS_PowerResolver::resolve('attack', 10, ['target_entity_id' => 22], $state, $this->powers);
 
@@ -306,15 +306,15 @@ final class PowerResolverTest extends TestCase
         ], $result['events']);
     }
 
-    public function testThornsDoNotDamageHeroWhenAttackingAtRangeTwo(): void
+    public function testSpikyDoNotDamageHeroWhenAttackingAtRangeTwo(): void
     {
         $state = $this->state;
-        $state['level_monster_abilities'] = ['thorns'];
+        $state['level_monster_abilities'] = ['spiky'];
 
         $result = HNS_PowerResolver::resolve('vortex_1', 10, ['selected_tile_id' => 2, 'target_entity_ids' => [21]], $state, $this->powers);
 
         $this->assertSame(10, $result['state']['entities'][10]['health']);
-        $this->assertNotContains('thornsDamage', array_column($result['events'], 'type'));
+        $this->assertNotContains('spikyDamage', array_column($result['events'], 'type'));
         $this->assertContains(['type' => HNS_FreeActionEngine::EVENT_AFTER_PUSH_OR_PULL, 'source_entity_id' => 10, 'target_entity_ids' => [20, 21, 22]], $result['events']);
     }
 
@@ -453,6 +453,41 @@ final class PowerResolverTest extends TestCase
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'dash_1'],
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_DASH, 'source_entity_id' => 10, 'target_tile_id' => 6],
         ], $result['events']);
+    }
+
+    public function testReinforceTargetsHeroAndEnablesNextCard(): void
+    {
+        $state = $this->state;
+        $state['entities'][11] = ['id' => 11, 'type' => 'hero', 'owner' => 2, 'tile_id' => 4, 'health' => 10, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('reinforce_1', 10, ['target_entity_id' => 11], $state, $this->powers);
+
+        $this->assertSame($state, $result['state']);
+        $this->assertSame([
+            ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'reinforce_1'],
+            ['type' => HNS_FreeActionEngine::EVENT_REINFORCE_NEXT_CARD, 'source_entity_id' => 10, 'target_entity_id' => 11],
+        ], $result['events']);
+    }
+
+    public function testReinforceRankTwoCanTargetHeroAtRangeThree(): void
+    {
+        $state = $this->state;
+        $state['entities'][11] = ['id' => 11, 'type' => 'hero', 'owner' => 2, 'tile_id' => 5, 'health' => 10, 'state' => 'active'];
+
+        $result = HNS_PowerResolver::resolve('reinforce_2', 10, ['target_entity_id' => 11], $state, $this->powers);
+
+        $this->assertSame(HNS_FreeActionEngine::EVENT_REINFORCE_NEXT_CARD, $result['events'][1]['type']);
+    }
+
+    public function testReinforceRankOneCannotTargetHeroAtRangeTwo(): void
+    {
+        $state = $this->state;
+        $state['entities'][11] = ['id' => 11, 'type' => 'hero', 'owner' => 2, 'tile_id' => 5, 'health' => 10, 'state' => 'active'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('Reinforce target is out of range for reinforce_1.');
+
+        HNS_PowerResolver::resolve('reinforce_1', 10, ['target_entity_id' => 11], $state, $this->powers);
     }
 
     public function testDashClearsSlimedStatus(): void
@@ -814,10 +849,10 @@ final class PowerResolverTest extends TestCase
         $this->assertSame(8, $result['state']['entities'][10]['health']);
     }
 
-    public function testLeechHealsAfterThornsDamage(): void
+    public function testLeechHealsAfterSpikyDamage(): void
     {
         $state = $this->state;
-        $state['level_monster_abilities'] = ['thorns'];
+        $state['level_monster_abilities'] = ['spiky'];
         $state['entities'][10]['health'] = 1;
 
         $result = HNS_PowerResolver::resolve('leech_1', 10, ['target_entity_id' => 20], $state, $this->powers);
@@ -827,7 +862,7 @@ final class PowerResolverTest extends TestCase
         $this->assertSame([
             ['type' => HNS_FreeActionEngine::EVENT_AFTER_CARD_PLAYED, 'source_entity_id' => 10, 'power_key' => 'leech_1'],
             ['type' => 'entityDamaged', 'source_entity_id' => 10, 'target_entity_id' => 20, 'damage' => 1, 'target_health' => 1],
-            ['type' => 'thornsDamage', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
+            ['type' => 'spikyDamage', 'source_entity_id' => 20, 'target_entity_id' => 10, 'damage' => 1],
             ['type' => 'entityHealed', 'source_entity_id' => 10, 'target_entity_id' => 10, 'heal' => 1, 'target_health' => 1],
         ], $result['events']);
     }
@@ -945,10 +980,10 @@ final class PowerResolverTest extends TestCase
         ], $result['events']);
     }
 
-    public function testDashAttackTriggersThornsAfterMovingIntoMelee(): void
+    public function testDashAttackTriggersSpikyAfterMovingIntoMelee(): void
     {
         $state = $this->state;
-        $state['level_monster_abilities'] = ['thorns'];
+        $state['level_monster_abilities'] = ['spiky'];
         unset($state['entities'][20], $state['entities'][21], $state['entities'][22], $state['entities'][23]);
         $state['entities'][30] = ['id' => 30, 'type' => 'monster', 'monster_size' => 'small', 'tile_id' => 3, 'health' => 2, 'state' => 'active'];
 
@@ -956,8 +991,8 @@ final class PowerResolverTest extends TestCase
 
         $this->assertSame(2, $result['state']['entities'][10]['tile_id']);
         $this->assertSame(9, $result['state']['entities'][10]['health']);
-        $this->assertSame(1, $result['state']['entities'][30]['health']);
-        $this->assertContains(['type' => 'thornsDamage', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 1], $result['events']);
+        $this->assertSame(0, $result['state']['entities'][30]['health']);
+        $this->assertContains(['type' => 'spikyDamage', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 1], $result['events']);
     }
 
     public function testDashAttackRankThreeDealsTwoDamageOncePerUse(): void

@@ -18,7 +18,7 @@ $monsters = [
         'can_attack_and_move' => false,
     ],
     2 => [
-        'name' => clienttranslate('Slimes'),
+        'name' => clienttranslate('Slime'),
         'level' => 1,
         'health' => 2,
         'spawn_count' => 1,

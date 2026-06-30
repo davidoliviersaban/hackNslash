@@ -49,6 +49,10 @@ final class HNS_PowerResolver
             return self::resolvePull($sourceEntityId, $payload, $state, $power, $events);
         }
 
+        if (($power['effect'] ?? null) === 'reinforce') {
+            return self::resolveReinforce($powerKey, $sourceEntityId, $payload, $state, $power, $events);
+        }
+
         throw new InvalidArgumentException("Unsupported power $powerKey.");
     }
 
@@ -451,6 +455,44 @@ final class HNS_PowerResolver
      * @param array<int, array<string, mixed>> $events
      * @return array{state: array<string, mixed>, events: array<int, array<string, mixed>>}
      */
+    private static function resolveReinforce(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
+    {
+        HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
+        $targetEntityId = (int) ($payload['target_entity_id'] ?? $sourceEntityId);
+        HNS_BoardRules::assertEntityExists($state, $targetEntityId);
+
+        if (($state['entities'][$targetEntityId]['type'] ?? null) !== 'hero') {
+            throw new InvalidArgumentException("Reinforce target must be a hero for $powerKey.");
+        }
+
+        $sourceTile = HNS_BoardRules::entityTile($state, $sourceEntityId);
+        $targetTile = HNS_BoardRules::entityTile($state, $targetEntityId);
+        $isInRange = ($power['range_metric'] ?? 'orthogonal') === 'chebyshev'
+            ? HNS_BoardRules::isInDiagonalRange($sourceTile, $targetTile, $power['range'])
+            : HNS_BoardRules::isInOrthogonalRange($sourceTile, $targetTile, $power['range']);
+        if (!$isInRange) {
+            throw new InvalidArgumentException("Reinforce target is out of range for $powerKey.");
+        }
+        if (!HNS_BoardRules::hasLineOfSight($sourceTile, $targetTile, $state['tiles'])) {
+            throw new InvalidArgumentException("Reinforce target is not in line of sight for $powerKey.");
+        }
+
+        $events[] = [
+            'type' => HNS_FreeActionEngine::EVENT_REINFORCE_NEXT_CARD,
+            'source_entity_id' => $sourceEntityId,
+            'target_entity_id' => $targetEntityId,
+        ];
+
+        return ['state' => $state, 'events' => $events];
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param array<string, mixed> $state
+     * @param array<string, mixed> $power
+     * @param array<int, array<string, mixed>> $events
+     * @return array{state: array<string, mixed>, events: array<int, array<string, mixed>>}
+     */
     private static function resolveJump(string $powerKey, int $sourceEntityId, array $payload, array $state, array $power, array $events): array
     {
         HNS_BoardRules::assertEntityExists($state, $sourceEntityId);
@@ -523,12 +565,12 @@ final class HNS_PowerResolver
      */
     private static function applyThornsDamageIfMelee(int $sourceEntityId, int $targetEntityId, array $sourceTile, array $targetTile, array $state, array &$events): array
     {
-        if (!in_array('thorns', $state['level_monster_abilities'] ?? [], true) || !HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
+        if (!in_array('spiky', $state['level_monster_abilities'] ?? [], true) || !HNS_BoardRules::isExactStep($sourceTile, $targetTile, 1)) {
             return $state;
         }
 
         $state = self::damageEntity($sourceEntityId, 1, $targetEntityId, $state, $events);
-        $events[] = ['type' => 'thornsDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
+        $events[] = ['type' => 'spikyDamage', 'source_entity_id' => $targetEntityId, 'target_entity_id' => $sourceEntityId, 'damage' => 1];
 
         return $state;
     }

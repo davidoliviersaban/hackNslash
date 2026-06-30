@@ -72,8 +72,9 @@ class Hacknslash extends \Bga\GameFramework\Table
         $difficulty = (int) ($options[101] ?? HNS_DIFFICULTY_NORMAL);
         $startLevel = $scenario === HNS_SCENARIO_BOSS_FIGHT ? HNS_BOSS_LEVEL : $this->startingDungeonLevelForPlayerCount(count($players));
         $startingHealth = $this->startingHealthForDifficulty($difficulty);
-        $startingPowers = $scenario === HNS_SCENARIO_BOSS_FIGHT ? $this->bossFightStartingPowers() : null;
+        $startingPowers = $scenario === HNS_SCENARIO_BOSS_FIGHT ? $this->bossFightStartingPowersByPlayer(array_keys($players)) : null;
         $this->saveGameContext($scenario, $difficulty);
+        $this->saveStartingLevel($startLevel);
 
         $this->setGameStateInitialValue('current_level', $startLevel);
         $this->setGameStateInitialValue('selected_tile', 0);
@@ -354,12 +355,17 @@ class Hacknslash extends \Bga\GameFramework\Table
             throw new BgaUserException(clienttranslate('Main action is not available.'));
         }
 
+        $isReinforcedFree = $this->isReinforcedFreePower($powerKey, $currentCooldown, $playerId, $playsRemaining);
+        if ($isReinforcedFree) {
+            $payload = $this->reinforcedPayload($powerKey, $payload);
+        } else {
+            unset($payload['_power_override']);
+        }
         $events = $this->resolvePowerForActivePlayer($powerKey, $payload);
         $this->recordHeroPowerStats($playerId, $powerKey, $events);
 
-        $isChainedPlay = $playsRemaining > 0;
-        $cooldown = $isChainedPlay ? $currentCooldown : $this->cooldownAfterPowerUse($powerKey, $isFree);
-        $newPlaysRemaining = $this->playsRemainingAfterUse($powerKey, $playsRemaining);
+        $newPlaysRemaining = $this->playsRemainingAfterUse($powerKey, $playsRemaining, $isReinforcedFree);
+        $cooldown = HNS_FreeActionEngine::cooldownAfterUse($this->cooldownAfterPowerUse($powerKey, $isFree), $newPlaysRemaining);
         $this->DbQuery("UPDATE player_power SET power_cooldown = $cooldown, power_plays_remaining = $newPlaysRemaining WHERE player_power_id = $powerId");
         if ($isFree) {
             $this->consumeFreePower($powerKey, $events, $cooldown, $playsRemaining);
@@ -372,7 +378,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $bossPhaseStarted = $this->hasBossPhaseStarted($events);
         $gameWon = $this->hasGameWon($events);
         $levelCleared = $this->isCurrentLevelCleared();
-        if (!$shouldEndTurn && !$bossPhaseStarted && !$gameWon) {
+        if (!$bossPhaseStarted && !$gameWon) {
             $this->notifyPlayerActionState($playerId, $powerId, $cooldown, $powerKey, $newPlaysRemaining);
         }
 
@@ -415,24 +421,21 @@ class Hacknslash extends \Bga\GameFramework\Table
      * - Chained play (already counting down): decrement.
      * - Single-play power: stays at 0.
      */
-    private function playsRemainingAfterUse(string $powerKey, int $currentPlaysRemaining): int
+    private function playsRemainingAfterUse(string $powerKey, int $currentPlaysRemaining, bool $isReinforcedFree = false): int
     {
-        $power = $this->bonus_cards[$powerKey] ?? [];
-        $totalPlays = max(1, (int) ($power['plays'] ?? 1));
-
-        if ($currentPlaysRemaining > 0) {
-            return max(0, $currentPlaysRemaining - 1);
-        }
-
-        if ($totalPlays > 1) {
-            return $totalPlays - 1;
-        }
-
-        return 0;
+        return HNS_FreeActionEngine::playsRemainingAfterUse($this->bonus_cards[$powerKey] ?? [], $currentPlaysRemaining, $isReinforcedFree);
     }
 
     private function isFreePowerAvailable(string $powerKey, int $cooldown, int $playerId, int $playsRemaining = 0): bool
     {
+        if ($playsRemaining > 0) {
+            return true;
+        }
+
+        if ($this->isReinforcedFreePower($powerKey, $cooldown, $playerId, $playsRemaining)) {
+            return true;
+        }
+
         $freeTriggers = $this->bonus_cards[$powerKey]['free_triggers'] ?? [];
         if (!is_array($freeTriggers) || $freeTriggers === []) {
             return false;
@@ -447,6 +450,16 @@ class Hacknslash extends \Bga\GameFramework\Table
     private function consumeFreePower(string $powerKey, array $events, int $cooldown, int $playsRemaining = 0): void
     {
         $chain = $this->loadFreeActionChain();
+        if ($playsRemaining > 0) {
+            $this->saveFreeActionChain($events, []);
+            return;
+        }
+
+        if ($this->isReinforceChainForPower($powerKey, $chain['active_event_chain'])) {
+            $this->saveFreeActionChain($events, []);
+            return;
+        }
+
         $engine = new HNS_FreeActionEngine($chain['active_event_chain'], $chain['used_action_keys']);
         // currentCooldown is passed as 0 because canUseFreeAction was already
         // validated upstream with the real cooldown + playsRemaining bypass.
@@ -458,6 +471,72 @@ class Hacknslash extends \Bga\GameFramework\Table
     private function startFreeActionChain(array $events): void
     {
         $this->saveFreeActionChain($events, []);
+    }
+
+    private function isReinforcedFreePower(string $powerKey, int $cooldown, int $playerId, int $playsRemaining = 0): bool
+    {
+        if (($this->bonus_cards[$powerKey]['effect'] ?? null) === 'reinforce' || $playsRemaining > 0 || $cooldown > 0) {
+            return false;
+        }
+
+        return $this->hasReinforceEventForPlayer($this->loadFreeActionChain()['active_event_chain'], $playerId);
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function isReinforceChainForPower(string $powerKey, array $events): bool
+    {
+        return ($this->bonus_cards[$powerKey]['effect'] ?? null) !== 'reinforce'
+            && $this->hasEventType($events, HNS_FreeActionEngine::EVENT_REINFORCE_NEXT_CARD);
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function hasReinforceEventForPlayer(array $events, int $playerId): bool
+    {
+        $state = $this->loadEngineState();
+        $heroEntityId = $this->findHeroEntityIdForPlayer($state, $playerId);
+        if ($heroEntityId === null) {
+            return false;
+        }
+
+        foreach ($events as $event) {
+            if (($event['type'] ?? null) === HNS_FreeActionEngine::EVENT_REINFORCE_NEXT_CARD && (int) ($event['target_entity_id'] ?? 0) === $heroEntityId) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private function hasEventType(array $events, string $type): bool
+    {
+        foreach ($events as $event) {
+            if (($event['type'] ?? null) === $type) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param array<string, mixed> $payload */
+    private function reinforcedPayload(string $powerKey, array $payload): array
+    {
+        if (($this->bonus_cards[$powerKey]['effect'] ?? null) !== 'dash') {
+            unset($payload['_power_override']);
+            return $payload;
+        }
+
+        $distance = $this->bonus_cards[$powerKey]['distance'] ?? null;
+        if (!is_array($distance) || count($distance) < 2) {
+            unset($payload['_power_override']);
+            return $payload;
+        }
+
+        $payload['_power_override'] = [
+            'distance' => [(int) ($distance[0] ?? 0), (int) ($distance[1] ?? 0) * 2],
+        ];
+        return $payload;
     }
 
     /**
@@ -738,7 +817,7 @@ class Hacknslash extends \Bga\GameFramework\Table
     {
         foreach ($events as $event) {
             $type = (string) ($event['type'] ?? '');
-            if (in_array($type, ['entityDamaged', 'monsterAttack', 'monsterCharge', 'trapDamage', 'thornsDamage'], true)) {
+            if (in_array($type, ['entityDamaged', 'monsterAttack', 'monsterCharge', 'trapDamage', 'spikyDamage'], true)) {
                 $this->recordDamageTakenEvent($event);
             } elseif ($type === 'monsterFrontArc' || $type === 'monsterExplode') {
                 $this->recordMultiTargetDamageTakenEvent($event);
@@ -814,35 +893,18 @@ class Hacknslash extends \Bga\GameFramework\Table
 
     private function ensureFinalComboTable(): void
     {
-        static $done = false;
-        if ($done) {
-            return;
-        }
-
-        $this->DbQuery("CREATE TABLE IF NOT EXISTS final_combo (combo_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, player_count TINYINT UNSIGNED NOT NULL, boss_key VARCHAR(32) DEFAULT NULL, outcome VARCHAR(8) NOT NULL, combo_key VARCHAR(255) NOT NULL, combo_json TEXT NOT NULL, PRIMARY KEY (combo_id), KEY combo_context_outcome (scenario, difficulty, outcome, player_count), KEY combo_boss_outcome (boss_key, outcome), KEY combo_key_idx (combo_key(191))) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
-        $done = true;
+        // Tables are declared in dbmodel.sql. Avoid runtime DDL on BGA tables:
+        // CREATE TABLE can take metadata locks and deadlock active page loads.
     }
 
     private function ensurePowerHistoryTable(): void
     {
-        static $done = false;
-        if ($done) {
-            return;
-        }
-
-        $this->DbQuery("CREATE TABLE IF NOT EXISTS power_history (history_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, player_id INT(10) UNSIGNED NOT NULL, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, power_key VARCHAR(32) NOT NULL, event_type VARCHAR(8) NOT NULL, PRIMARY KEY (history_id), KEY power_history_event (scenario, difficulty, event_type, power_key), KEY power_history_player (player_id, event_type)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
-        $done = true;
+        // Tables are declared in dbmodel.sql. Avoid runtime DDL on BGA tables.
     }
 
     private function ensureWinStreakTable(): void
     {
-        static $done = false;
-        if ($done) {
-            return;
-        }
-
-        $this->DbQuery("CREATE TABLE IF NOT EXISTS win_streak (streak_id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT, scenario VARCHAR(16) NOT NULL, difficulty VARCHAR(16) NOT NULL, player_count TINYINT UNSIGNED NOT NULL, current_streak INT(10) UNSIGNED NOT NULL DEFAULT '0', best_streak INT(10) UNSIGNED NOT NULL DEFAULT '0', PRIMARY KEY (streak_id), UNIQUE KEY win_streak_context (scenario, difficulty, player_count)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 AUTO_INCREMENT=1");
-        $done = true;
+        // Tables are declared in dbmodel.sql. Avoid runtime DDL on BGA tables.
     }
 
     private function recordWinStreak(string $scenario, string $difficulty, int $playerCount, string $outcome): void
@@ -949,6 +1011,17 @@ class Hacknslash extends \Bga\GameFramework\Table
         $safeDifficulty = $this->hns_sql_escape($this->difficultyKey($difficulty));
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('scenario', '$safeScenario')");
         $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('difficulty', '$safeDifficulty')");
+    }
+
+    private function saveStartingLevel(int $level): void
+    {
+        $this->DbQuery("REPLACE INTO global_var (var_name, var_value) VALUES ('starting_level', '$level')");
+    }
+
+    protected function currentStartingLevel(): int
+    {
+        $level = (int) $this->getUniqueValueFromDB("SELECT var_value FROM global_var WHERE var_name = 'starting_level'");
+        return $level > 0 ? $level : HNS_FIRST_LEVEL;
     }
 
     private function startingHealthForDifficulty(int $difficulty): int
@@ -1213,7 +1286,12 @@ class Hacknslash extends \Bga\GameFramework\Table
         }
 
         try {
-            $result = HNS_PowerResolver::resolve($powerKey, $heroEntityId, $payload, $state, $this->bonus_cards);
+            $powers = $this->bonus_cards;
+            if (isset($payload['_power_override']) && is_array($payload['_power_override'])) {
+                $powers[$powerKey] = array_replace($powers[$powerKey], $payload['_power_override']);
+                unset($payload['_power_override']);
+            }
+            $result = HNS_PowerResolver::resolve($powerKey, $heroEntityId, $payload, $state, $powers);
         } catch (InvalidArgumentException $e) {
             throw new BgaUserException(clienttranslate($e->getMessage()));
         }
@@ -1286,6 +1364,7 @@ class Hacknslash extends \Bga\GameFramework\Table
         $this->safeIncPlayerStat(1, 'powers_taken', $playerId);
         $this->recordPowerHistory($playerId, $chosenPowerKey, 'taken');
 
+        $this->removePowerFromRewardOffers($chosenPowerKey);
         $this->clearRewardForPlayer($playerId);
         $this->notifyAllPlayers('rewardChosen', clienttranslate('${player_name} chooses a reward'), [
             'player_id' => $playerId,
@@ -1397,10 +1476,11 @@ class Hacknslash extends \Bga\GameFramework\Table
     private function buildRewardOffersByPlayer(array $remainingPowerDeck): array
     {
         $offers = [];
-        foreach ($this->getCollectionFromDb('SELECT player_id id FROM player') as $player) {
-            $playerId = (int) $player['id'];
-            $playerPowers = array_values($this->getCollectionFromDb("SELECT power_slot slot, power_key FROM player_power WHERE player_id = $playerId ORDER BY power_slot"));
-            $offers[$playerId] = HNS_LevelReward::drawOfferForPlayer($this->bonus_cards, $remainingPowerDeck, $playerPowers);
+        $players = $this->getCollectionFromDb('SELECT player_id id FROM player');
+        $allPlayerPowers = array_values($this->getCollectionFromDb('SELECT power_slot slot, power_key FROM player_power ORDER BY player_id, power_slot'));
+        $sharedOffer = HNS_LevelReward::drawOfferForPlayer($this->bonus_cards, $remainingPowerDeck, $allPlayerPowers);
+        foreach ($players as $player) {
+            $offers[(int) $player['id']] = $sharedOffer;
         }
 
         return $offers;
@@ -1465,6 +1545,18 @@ class Hacknslash extends \Bga\GameFramework\Table
         unset($offers[$playerId], $upgrades[$playerId]);
         $this->saveCurrentRewardOffersByPlayer($offers);
         $this->saveCurrentRewardUpgradesByPlayer($upgrades);
+    }
+
+    private function removePowerFromRewardOffers(string $powerKey): void
+    {
+        $offers = $this->getCurrentRewardOffersByPlayer();
+        foreach ($offers as $playerId => $offer) {
+            $offers[(int) $playerId] = array_values(array_filter(
+                $offer,
+                static fn (string $offeredPowerKey): bool => $offeredPowerKey !== $powerKey
+            ));
+        }
+        $this->saveCurrentRewardOffersByPlayer($offers);
     }
 
     private function getRewardMap(string $name): array

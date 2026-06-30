@@ -35,6 +35,7 @@
   /* Semantic — highlights */
   --hns-green: #70d66b;
   --hns-green-glow: rgba(112, 214, 107, 0.65);
+  --hns-green-overlay: rgba(50, 220, 80, 0.42);
   --hns-blue: #8fc7ff;
   --hns-blue-glow: rgba(95, 177, 255, 0.7);
   --hns-blue-strong: rgba(143, 199, 255, 0.9);
@@ -56,11 +57,11 @@
   --hns-hero-bg: #203a5f;
   --hns-hero-border: #70b8ff;
 
-  /* Shield / Thorns effect glows */
+  /* Shield / Spiky effect glows */
   --hns-shield-glow: rgba(82, 169, 255, 0.95);
   --hns-shield-glow-outer: rgba(82, 169, 255, 0.72);
-  --hns-thorns-glow: rgba(128, 76, 36, 0.98);
-  --hns-thorns-glow-outer: rgba(91, 49, 24, 0.78);
+  --hns-spiky-glow: rgba(128, 76, 36, 0.98);
+  --hns-spiky-glow-outer: rgba(91, 49, 24, 0.78);
 
   /* Badges */
   --hns-badge-bg: #38291f;
@@ -192,6 +193,7 @@
 }
 
 .hns_tile.hns_free_move_tile,
+.hns_tile.hns_paid_move_tile,
 .hns_tile.hns_power_target_tile,
 .hns_tile.hns_power_area_candidate_tile,
 .hns_tile.hns_power_area_preview_tile,
@@ -222,8 +224,30 @@
 .hns_tile.hns_free_move_tile {
   outline: 4px solid var(--hns-green);
   outline-offset: -4px;
+  box-shadow: inset 0 0 0 2px rgba(213, 255, 207, 0.72), 0 0 18px var(--hns-green-glow);
+  filter: brightness(1.28) saturate(1.35);
+}
+
+.hns_tile.hns_paid_move_tile {
+  outline: 4px solid var(--hns-green);
+  outline-offset: -4px;
   box-shadow: 0 0 14px var(--hns-green-glow);
-  filter: brightness(1.2) saturate(1.2);
+  filter: brightness(1.18) saturate(1.18);
+}
+
+.hns_tile.hns_free_move_tile::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(135deg, rgba(172, 255, 158, 0.5), var(--hns-green-overlay));
+  box-shadow: inset 0 0 22px rgba(12, 90, 24, 0.42);
+  animation: hns_free_move_tile_pulse 900ms ease-in-out infinite alternate;
+}
+
+@keyframes hns_free_move_tile_pulse {
+  from { opacity: 0.72; }
+  to { opacity: 1; }
 }
 
 .hns_tile.hns_power_target_tile {
@@ -345,27 +369,27 @@
   transform: translate(-11px, -11px);
 }
 
-/* ===== Entity effects: shield & thorns (composable via CSS variable) ===== */
+/* ===== Entity effects: shield & spiky (composable via CSS variable) ===== */
 
 .hns_entity_shielded {
   --hns-effect-filter: drop-shadow(0 0 5px var(--hns-shield-glow)) drop-shadow(0 0 10px var(--hns-shield-glow-outer));
 }
 
-.hns_entity_thorns {
-  --hns-effect-filter: drop-shadow(0 0 5px var(--hns-thorns-glow)) drop-shadow(0 0 11px var(--hns-thorns-glow-outer));
+.hns_entity_spiky {
+  --hns-effect-filter: drop-shadow(0 0 5px var(--hns-spiky-glow)) drop-shadow(0 0 11px var(--hns-spiky-glow-outer));
 }
 
-.hns_entity_shielded.hns_entity_thorns {
-  --hns-effect-filter: drop-shadow(0 0 5px var(--hns-shield-glow)) drop-shadow(0 0 10px var(--hns-shield-glow-outer)) drop-shadow(0 0 5px var(--hns-thorns-glow));
+.hns_entity_shielded.hns_entity_spiky {
+  --hns-effect-filter: drop-shadow(0 0 5px var(--hns-shield-glow)) drop-shadow(0 0 10px var(--hns-shield-glow-outer)) drop-shadow(0 0 5px var(--hns-spiky-glow));
 }
 
 .hns_entity_shielded,
-.hns_entity_thorns {
+.hns_entity_spiky {
   filter: var(--hns-effect-filter);
 }
 
 .hns_entity_shielded:hover, .hns_entity_shielded.hns_selected,
-.hns_entity_thorns:hover, .hns_entity_thorns.hns_selected {
+.hns_entity_spiky:hover, .hns_entity_spiky.hns_selected {
   filter: brightness(1.15) var(--hns-effect-filter);
 }
 
@@ -487,7 +511,7 @@
 }
 
 .hns_entity .hns_entity_shield_icon,
-.hns_entity .hns_entity_thorns_icon {
+.hns_entity .hns_entity_spiky_icon {
   width: 18px;
   height: 18px;
   max-width: 18px;
@@ -501,7 +525,7 @@
   transform: none;
 }
 
-.hns_entity .hns_entity_thorns_icon {
+.hns_entity .hns_entity_spiky_icon {
   background: rgba(60, 34, 20, 0.94);
   border-color: rgba(204, 151, 93, 0.95);
   box-shadow: 0 0 8px rgba(128, 76, 36, 0.85), 0 2px 6px rgba(0, 0, 0, 0.55);
@@ -933,17 +957,94 @@
 }
 
 .hns_hero_stats {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
+  display: grid;
+  gap: 7px;
   color: var(--hns-text-secondary);
-  font-size: 13px;
 }
 
-.hns_hero_stats span {
-  padding: 5px 7px;
+.hns_hero_health {
+  display: flex;
+  gap: 1px;
+  flex-wrap: wrap;
+  line-height: 1;
+}
+
+.hns_heart {
+  font-size: 17px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+.hns_heart_full {
+  color: #ff5b68;
+}
+
+.hns_heart_lost {
+  color: #5d5450;
+  filter: grayscale(1);
+  opacity: 0.48;
+}
+
+.hns_hero_action_row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hns_hero_ap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  padding: 5px 9px;
   border-radius: var(--hns-radius-pill);
-  background: rgba(255, 255, 255, 0.08);
+  background: linear-gradient(180deg, rgba(246, 200, 95, 0.2), rgba(246, 200, 95, 0.08));
+  border: 1px solid rgba(246, 200, 95, 0.42);
+  color: var(--hns-gold-light);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.hns_ap_value {
+  font-size: 26px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.hns_ap_max {
+  color: var(--hns-text-warm);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hns_hero_free_move {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border-radius: var(--hns-radius-pill);
+  border: 1px solid rgba(112, 214, 107, 0.35);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.hns_hero_free_move.hns_available {
+  background: rgba(50, 220, 80, 0.18);
+  color: #caffc5;
+  box-shadow: 0 0 12px rgba(112, 214, 107, 0.28);
+}
+
+.hns_hero_free_move.hns_spent {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: var(--hns-text-muted);
+  filter: grayscale(1);
+  opacity: 0.58;
+}
+
+.hns_free_move_icon {
+  font-size: 15px;
+  line-height: 1;
 }
 
 .hns_hero_effects,
@@ -1025,6 +1126,30 @@
 @media (max-width: 860px) {
   #hns_wrap {
     grid-template-columns: 1fr;
+  }
+
+  #hns_center {
+    display: contents;
+  }
+
+  #hns_main {
+    order: 1;
+  }
+
+  #hns_side {
+    order: 2;
+  }
+
+  #hns_monster_panel {
+    order: 3;
+  }
+
+  #hns_reward_panel {
+    order: 4;
+  }
+
+  #hns_events {
+    order: 5;
   }
 
   #hns_monster_cards {

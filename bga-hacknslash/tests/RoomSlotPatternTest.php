@@ -63,7 +63,7 @@ final class RoomSlotPatternTest extends TestCase
         $room = [
             1 => ['type' => 'monster', 'size' => 'small'],
             2 => ['type' => 'monster', 'size' => 'big'],
-            3 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            3 => ['type' => 'enchantment', 'enchantment' => 'shielded'],
             4 => ['type' => 'monster', 'size' => 'big'],
             5 => ['type' => 'monster', 'size' => 'small'],
             6 => ['type' => 'monster', 'size' => 'big'],
@@ -94,7 +94,7 @@ final class RoomSlotPatternTest extends TestCase
     public function testEnchantmentOnEvenSlotIsRejected(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            2 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            2 => ['type' => 'enchantment', 'enchantment' => 'shielded'],
         ]);
 
         $this->assertContains('slot 2 cannot contain an enchantment', $errors);
@@ -103,7 +103,7 @@ final class RoomSlotPatternTest extends TestCase
     public function testRoomRejectsMoreThanTwoEnchantments(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            1 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            1 => ['type' => 'enchantment', 'enchantment' => 'shielded'],
             3 => ['type' => 'enchantment', 'enchantment' => 'spikes'],
             5 => ['type' => 'enchantment', 'enchantment' => 'weakness'],
         ]);
@@ -114,10 +114,10 @@ final class RoomSlotPatternTest extends TestCase
     public function testRoomRejectsDuplicateEnchantments(): void
     {
         $errors = HNS_RoomSlotPattern::validate([
-            1 => ['type' => 'enchantment', 'enchantment' => 'shield'],
-            3 => ['type' => 'enchantment', 'enchantment' => 'shield'],
+            1 => ['type' => 'enchantment', 'enchantment' => 'shielded'],
+            3 => ['type' => 'enchantment', 'enchantment' => 'shielded'],
         ]);
 
-        $this->assertContains('room cannot contain duplicate enchantment shield', $errors);
+        $this->assertContains('room cannot contain duplicate enchantment shielded', $errors);
     }
 }

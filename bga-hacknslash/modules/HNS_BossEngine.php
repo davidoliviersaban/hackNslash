@@ -107,6 +107,7 @@ final class HNS_BossEngine
             }
 
             if (($action['type'] ?? null) === 'charge') {
+                $eventCountBeforeCharge = count($events);
                 $result = HNS_MonsterAi::activate($bossEntityId, $state, [
                     'effect' => 'charge',
                     'damage' => (int) ($action['damage'] ?? 0),
@@ -118,10 +119,28 @@ final class HNS_BossEngine
                 ]);
                 $state = $result['state'];
                 array_push($events, ...$result['events']);
+                if (!self::hasEventSince($events, $eventCountBeforeCharge, 'monsterCharge')) {
+                    $targetHeroId = self::closestHeroId($bossEntityId, $state);
+                    if ($targetHeroId !== null) {
+                        $state = self::moveToward($bossEntityId, $targetHeroId, $state, $phaseMaterial, $events);
+                    }
+                }
             }
         }
 
         return $state;
+    }
+
+    /** @param array<int, array<string, mixed>> $events */
+    private static function hasEventSince(array $events, int $offset, string $type): bool
+    {
+        for ($i = $offset; $i < count($events); $i++) {
+            if (($events[$i]['type'] ?? null) === $type) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -367,7 +386,7 @@ final class HNS_BossEngine
             $shielded[] = (int) $entityId;
         }
 
-        $state['level_monster_abilities'] = array_values(array_unique([...(array) ($state['level_monster_abilities'] ?? []), 'shield']));
+        $state['level_monster_abilities'] = array_values(array_unique([...(array) ($state['level_monster_abilities'] ?? []), 'shielded']));
         $events[] = ['type' => 'bossGrantShield', 'target_entity_ids' => $shielded];
 
         return $state;
@@ -404,7 +423,7 @@ final class HNS_BossEngine
                 'on_death' => $material['on_death'] ?? null,
                 'damage' => $material['damage'] ?? 0,
             ];
-            if (in_array('shield', $state['level_monster_abilities'] ?? [], true)) {
+            if (in_array('shielded', $state['level_monster_abilities'] ?? [], true)) {
                 $state['entities'][$entityId]['has_shield'] = 1;
                 $state['entities'][$entityId]['shield_broken'] = 0;
             }

@@ -10,7 +10,7 @@ final class PowerMaterialTest extends TestCase
     {
         include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
 
-        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'dash_attack_1', 'dash_attack_2', 'dash_attack_3', 'fireball_1', 'fireball_2', 'fireball_3', 'grab_1', 'grab_2', 'grab_3', 'heal_1', 'heal_2', 'heal_3', 'jump_1', 'jump_2', 'jump_3', 'leech_1', 'leech_2', 'leech_3', 'vortex_1', 'vortex_2', 'vortex_3', 'whirlwind_1', 'whirlwind_2', 'whirlwind_3', 'power_strike_1', 'power_strike_2', 'power_strike_3', 'quick_strike_1', 'quick_strike_2', 'quick_strike_3', 'quick_shot_1', 'quick_shot_2', 'quick_shot_3', 'point_blank_1', 'point_blank_2', 'point_blank_3'], array_keys($bonus_cards));
+        $this->assertSame(['attack', 'strike', 'dash_1', 'dash_2', 'dash_3', 'dash_attack_1', 'dash_attack_2', 'dash_attack_3', 'fireball_1', 'fireball_2', 'fireball_3', 'grab_1', 'grab_2', 'grab_3', 'heal_1', 'heal_2', 'heal_3', 'jump_1', 'jump_2', 'jump_3', 'leech_1', 'leech_2', 'leech_3', 'vortex_1', 'vortex_2', 'vortex_3', 'whirlwind_1', 'whirlwind_2', 'whirlwind_3', 'power_strike_1', 'power_strike_2', 'power_strike_3', 'quick_strike_1', 'quick_strike_2', 'quick_strike_3', 'quick_shot_1', 'quick_shot_2', 'quick_shot_3', 'point_blank_1', 'point_blank_2', 'point_blank_3', 'reinforce_1', 'reinforce_2', 'reinforce_3'], array_keys($bonus_cards));
     }
 
     public function testAttackPowerDefinition(): void
@@ -276,5 +276,24 @@ final class PowerMaterialTest extends TestCase
         $this->assertSame(2, $bonus_cards['point_blank_3']['push_distance']);
         $this->assertSame(['afterPushOrPull'], $bonus_cards['point_blank_3']['free_triggers']);
         $this->assertNull($bonus_cards['point_blank_3']['upgrades_to']);
+    }
+
+    public function testReinforcePowerDefinition(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bonus_cards.inc.php';
+
+        $this->assertSame('Renforcement', $bonus_cards['reinforce_1']['name']);
+        $this->assertSame('reinforce', $bonus_cards['reinforce_1']['effect']);
+        $this->assertSame([0, 1], $bonus_cards['reinforce_1']['range']);
+        $this->assertSame('chebyshev', $bonus_cards['reinforce_1']['range_metric']);
+        $this->assertSame(2, $bonus_cards['reinforce_1']['cooldown']);
+        $this->assertSame([], $bonus_cards['reinforce_1']['free_triggers']);
+        $this->assertSame('reinforce_2', $bonus_cards['reinforce_1']['upgrades_to']);
+        $this->assertSame([0, 3], $bonus_cards['reinforce_2']['range']);
+        $this->assertSame(2, $bonus_cards['reinforce_2']['cooldown']);
+        $this->assertSame('reinforce_3', $bonus_cards['reinforce_2']['upgrades_to']);
+        $this->assertSame([0, 3], $bonus_cards['reinforce_3']['range']);
+        $this->assertSame(1, $bonus_cards['reinforce_3']['cooldown']);
+        $this->assertNull($bonus_cards['reinforce_3']['upgrades_to']);
     }
 }

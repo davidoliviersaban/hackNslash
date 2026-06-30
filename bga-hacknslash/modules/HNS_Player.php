@@ -4,7 +4,19 @@ trait HNS_Player
 {
     protected function getPlayersWithState(): array
     {
-        return $this->getCollectionFromDb('SELECT player_id id, player_name name, player_color color, player_score score, player_health health, player_action_points action_points, player_position_x x, player_position_y y, player_level level, player_free_move_available free_move_available, player_main_action_available main_action_available FROM player');
+        $players = $this->getCollectionFromDb('SELECT player_id id, player_name name, player_color color, player_score score, player_health health, player_action_points action_points, player_position_x x, player_position_y y, player_level level, player_free_move_available free_move_available, player_main_action_available main_action_available FROM player');
+        $maxHealth = match ($this->currentDifficultyKey()) {
+            'easy' => HNS_EASY_HEALTH,
+            'hard' => HNS_HARD_HEALTH,
+            'hardcore' => HNS_HARDCORE_HEALTH,
+            default => HNS_DEFAULT_HEALTH,
+        };
+        foreach ($players as &$player) {
+            $player['max_health'] = $maxHealth;
+        }
+        unset($player);
+
+        return $players;
     }
 
     protected function getActivePlayerActionPoints(): int

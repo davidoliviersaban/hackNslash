@@ -305,6 +305,9 @@ define([
       if (power.effect === 'heal') {
         return entity.type === 'hero' && GameRules.isEntityInPowerRange(from, entity, power, tiles);
       }
+      if (power.effect === 'reinforce') {
+        return entity.type === 'hero' && GameRules.isEntityInPowerRange(from, entity, power, tiles);
+      }
       if (power.effect === 'dash_attack') {
         if (!selectedPowerTileId) {
           return false;
@@ -379,6 +382,10 @@ define([
         return GameRules.entityOnTile(tile.id, entities, ['hero']) !== null;
       }
 
+      if (power.effect === 'reinforce') {
+        return GameRules.entityOnTile(tile.id, entities, ['hero']) !== null;
+      }
+
       if (power.effect === 'dash_attack') {
         var range = power.range || [0, 0];
         var distance = GameRules.powerDistance(from, tile, 'orthogonal');
@@ -406,7 +413,7 @@ define([
 
     getMonsterKey: function (typeArg) {
       var keys = {
-        1: 'goblin', 2: 'slimes', 3: 'evil-eye', 4: 'kamikaze',
+        1: 'goblin', 2: 'slime', 3: 'evil-eye', 4: 'kamikaze',
         5: 'wizard', 6: 'bomber', 7: 'orc', 8: 'pig-rider', 9: 'wolf-rider'
       };
       return keys[typeArg] || 'goblin';
@@ -476,7 +483,7 @@ define([
     getMonsterTileImage: function (monsterKey) {
       var files = {
         'goblin': 'tiles/monsters/goblin-pixel.webp',
-        'slimes': 'tiles/monsters/slime-pixel.webp',
+        'slime': 'tiles/monsters/slime-pixel.webp',
         'evil-eye': 'tiles/monsters/evil-eye-pixel.webp',
         'kamikaze': 'tiles/monsters/goblin-kamikaze-pixel.webp',
         'wizard': 'tiles/monsters/goblin-wizard-pixel.webp',
@@ -503,7 +510,7 @@ define([
 
       var files = {
         'goblin': 'cards/monsters/gobelins.webp',
-        'slimes': 'cards/monsters/slimes.webp',
+        'slime': 'cards/monsters/slime.webp',
         'evil-eye': 'cards/monsters/evil-eye.webp',
         'kamikaze': 'cards/monsters/goblin-kamikaze.webp',
         'wizard': 'cards/monsters/goblin-wizard.webp',
@@ -561,9 +568,9 @@ define([
         'quick_strike_1': 'cards/powers/quick-strike-1.webp',
         'quick_strike_2': 'cards/powers/quick-strike-2.webp',
         'quick_strike_3': 'cards/powers/quick-strike-3.webp',
-        'reinforce_1': 'cards/powers/reinforce-1.webp',
-        'reinforce_2': 'cards/powers/reinforce-2.webp',
-        'reinforce_3': 'cards/powers/reinforce-3.webp',
+        'reinforce_1': 'cards/powers/reinformcement-1.webp',
+        'reinforce_2': 'cards/powers/reinformcement-2.webp',
+        'reinforce_3': 'cards/powers/reinformcement-3.webp',
         'vortex_1': 'cards/powers/vortex-1.webp',
         'vortex_2': 'cards/powers/vortex-2.webp',
         'vortex_3': 'cards/powers/vortex-3.webp',
@@ -621,6 +628,16 @@ define([
     };
   }
 
+  function entityStackOffset(index, count) {
+    if (count <= 1) {
+      return { left: 0, top: 0 };
+    }
+    var offsets = count === 2
+      ? [{ left: -11, top: -8 }, { left: 11, top: 8 }]
+      : [{ left: -13, top: -10 }, { left: 13, top: -10 }, { left: -13, top: 10 }, { left: 13, top: 10 }, { left: 0, top: 0 }];
+    return offsets[index % offsets.length];
+  }
+
   function createSkipHandler(actionName) {
     return function () {
       if (this.checkAction(actionName)) {
@@ -638,7 +655,7 @@ define([
   jstpl_hns_entity = '<div id="hns_entity_${id}" class="hns_entity hns_entity_${type} hns_entity_${slug} ${state_class}" data-entity-id="${id}" data-entity-type="${type}" data-monster-key="${monster_key}" role="button" tabindex="-1" aria-label="${label}"><img src="${image}" alt="${label}" /><span class="hns_entity_effects">${effects}</span><span class="hns_entity_health">${health}</span></div>';
   jstpl_hns_monster_card = '<div id="hns_monster_card_${key}" class="hns_monster_card ${state_class}" data-monster-key="${key}" role="button" tabindex="0" aria-label="${name}"><div class="hns_monster_card_effects">${effects}</div><img src="${image}" alt="${name}" /><div class="hns_monster_card_footer"><strong>${name}</strong><span>${count}</span></div><div class="hns_monster_card_losses">${losses}</div></div>';
   jstpl_hns_power_card = '<div id="hns_power_card_${key}" class="hns_power_card ${classes}" data-power-key="${power_key}" data-slot="${slot}" role="button" tabindex="0" aria-label="${name}" title="${name}"><img src="${image}" alt="${name}" /><div class="hns_power_cooldown_overlay">${cooldown_overlay}</div><div class="hns_power_card_badges">${badges}</div></div>';
-  jstpl_hns_hero_card = '<div class="hns_hero_card_body"><img class="hns_hero_portrait" src="${portrait}" alt="${name}" /><div class="hns_hero_details"><div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><span>${health_label}: ${health}</span><span>${ap_label}: ${action_points}</span></div><div class="hns_hero_effects">${effects}</div></div></div><div class="hns_hero_mini_powers">${powers}</div>';
+  jstpl_hns_hero_card = '<div class="hns_hero_card_body"><img class="hns_hero_portrait" src="${portrait}" alt="${name}" /><div class="hns_hero_details"><div class="hns_hero_identity"><span class="hns_hero_color" style="background:#${color}"></span><strong>${name}</strong></div><div class="hns_hero_stats"><div class="hns_hero_health" aria-label="${health_label}">${health_icons}</div><div class="hns_hero_action_row"><div class="hns_hero_ap" aria-label="${ap_label}">${action_points}</div><div class="hns_hero_free_move ${free_move_class}" title="${free_move_label}"><span class="hns_free_move_icon">&rarr;</span><span>${free_move_label}</span></div></div></div><div class="hns_hero_effects">${effects}</div></div></div><div class="hns_hero_mini_powers">${powers}</div>';
   jstpl_hns_event = '<div class="hns_event hns_event_${type}">${message}</div>';
   /* eslint-enable no-undef */
 
@@ -681,7 +698,7 @@ define([
       this.syncRewardForCurrentPlayer(gamedatas);
       this.buildPageLayout();
       this.renderBoard(gamedatas.tiles, gamedatas.entities);
-      this.scheduleFreeMoveHighlight();
+      this.scheduleMoveHighlight();
       this.renderAllPanels();
       this.renderEventMessages();
       this.connect($('hns_power_validate'), 'onclick', 'onValidatePowerSelection');
@@ -805,6 +822,42 @@ define([
       this.updateAllEntityStackOrders();
     },
 
+    syncBoardEntities: function (entities) {
+      var current = this.gamedatas.entities || {};
+      var tiles = this.gamedatas.tiles || {};
+
+      for (var existingId in current) {
+        if (!entities[existingId]) {
+          var oldNode = $('hns_entity_' + existingId);
+          if (oldNode) {
+            dojo.destroy(oldNode);
+          }
+        }
+      }
+
+      this.gamedatas.entities = entities || {};
+      for (var entityId in this.gamedatas.entities) {
+        var entity = this.gamedatas.entities[entityId];
+        var node = $('hns_entity_' + entityId);
+        if (!node) {
+          this.placeEntity(entity, tiles);
+          continue;
+        }
+
+        var tile = tiles[entity.tile_id];
+        if (tile) {
+          var box = tileBox(tile, tiles);
+          setNodePosition(node, box.left + (box.width / 2), box.top + (box.height / 2));
+        }
+        this.updateEntityHealthBadge(entityId, entity.health || 0);
+        this.updateEntityEffects(entityId);
+        dojo.removeClass(node, 'hns_entity_dead hns_entity_shielded hns_entity_spiky hns_entity_big');
+        dojo.addClass(node, this.entityStateClasses(entity));
+      }
+
+      this.updateAllEntityStackOrders();
+    },
+
     resizeBoardToTiles: function (tiles) {
       var bounds = tileBounds(tiles);
       dojo.style('hns_board', {
@@ -852,16 +905,32 @@ define([
       if (stacked.length <= 1) {
         if (stacked.length === 1) {
           var singleNode = $('hns_entity_' + stacked[0]);
-          if (singleNode) { dojo.style(singleNode, 'zIndex', 4); }
+          var singleEntity = entities[stacked[0]];
+          var singleTile = singleEntity && this.gamedatas.tiles && this.gamedatas.tiles[singleEntity.tile_id];
+          if (singleNode && singleTile) {
+            var singleBox = tileBox(singleTile, this.gamedatas.tiles || {});
+            setNodePosition(singleNode, singleBox.left + (singleBox.width / 2), singleBox.top + (singleBox.height / 2));
+            dojo.style(singleNode, 'zIndex', 4);
+          }
         }
         return;
       }
       stacked.sort(function (a, b) {
-        return parseInt(entities[b].health || 0, 10) - parseInt(entities[a].health || 0, 10);
+        var healthDiff = parseInt(entities[b].health || 0, 10) - parseInt(entities[a].health || 0, 10);
+        return healthDiff || (parseInt(a, 10) - parseInt(b, 10));
       });
+      var tile = this.gamedatas.tiles && this.gamedatas.tiles[tileId];
+      if (!tile) {
+        return;
+      }
+      var box = tileBox(tile, this.gamedatas.tiles || {});
+      var centerLeft = box.left + (box.width / 2);
+      var centerTop = box.top + (box.height / 2);
       for (var i = 0; i < stacked.length; i++) {
         var node = $('hns_entity_' + stacked[i]);
         if (node) {
+          var offset = entityStackOffset(i, stacked.length);
+          setNodePosition(node, centerLeft + offset.left, centerTop + offset.top);
           dojo.style(node, 'zIndex', 4 + i);
         }
       }
@@ -887,8 +956,8 @@ define([
       if (this.hasActiveShield(entity)) {
         classes.push('hns_entity_shielded');
       }
-      if (this.hasThorns(entity)) {
-        classes.push('hns_entity_thorns');
+      if (this.hasSpiky(entity)) {
+        classes.push('hns_entity_spiky');
       }
       if (entity.type === 'monster' && (entity.monster_size || 'small') === 'big') {
         classes.push('hns_entity_big');
@@ -927,35 +996,58 @@ define([
     },
 
     renderMonsterCards: function () {
-      dojo.empty('hns_monster_cards');
-
       var monsterGroups = this.getVisibleMonsterGroups();
       var hasMonsters = false;
+      var seen = {};
+      dojo.query('#hns_monster_cards .hns_empty_state').forEach(dojo.destroy);
 
       for (var monsterKey in monsterGroups) {
         hasMonsters = true;
         var group = monsterGroups[monsterKey];
         var effects = this.renderMonsterEffectIcons(group.effects);
-        dojo.place(this.format_block('jstpl_hns_monster_card', {
-          key: monsterKey,
-          name: group.name,
-          image: AssetManager.getMonsterCardImage(monsterKey),
-          count: 'x' + group.count,
-          state_class: group.count > 0 ? (group.deadCount > 0 ? 'hns_monster_card_damaged' : '') : 'hns_monster_card_dead',
-          losses: group.deadCount > 0 ? '-' + group.deadCount : '',
-          effects: effects
-        }), 'hns_monster_cards');
-        this.connect($('hns_monster_card_' + monsterKey), 'onclick', 'onMonsterCardClick');
+        var stateClass = group.count > 0 ? (group.deadCount > 0 ? 'hns_monster_card_damaged' : '') : 'hns_monster_card_dead';
+        var node = $('hns_monster_card_' + monsterKey);
+        seen[monsterKey] = true;
+        if (!node) {
+          dojo.place(this.format_block('jstpl_hns_monster_card', {
+            key: monsterKey,
+            name: group.name,
+            image: AssetManager.getMonsterCardImage(monsterKey),
+            count: 'x' + group.count,
+            state_class: stateClass,
+            losses: group.deadCount > 0 ? '-' + group.deadCount : '',
+            effects: effects
+          }), 'hns_monster_cards');
+          this.connect($('hns_monster_card_' + monsterKey), 'onclick', 'onMonsterCardClick');
+          continue;
+        }
+
+        dojo.place(node, 'hns_monster_cards');
+        dojo.removeClass(node, 'hns_monster_card_dead hns_monster_card_damaged');
+        if (stateClass) { dojo.addClass(node, stateClass); }
+        var effectNodes = dojo.query('.hns_monster_card_effects', node);
+        if (effectNodes.length) { effectNodes[0].innerHTML = effects; }
+        var footerCount = dojo.query('.hns_monster_card_footer span', node);
+        if (footerCount.length) { footerCount[0].innerHTML = 'x' + group.count; }
+        var losses = dojo.query('.hns_monster_card_losses', node);
+        if (losses.length) { losses[0].innerHTML = group.deadCount > 0 ? '-' + group.deadCount : ''; }
       }
 
-      if (!hasMonsters) {
+      dojo.query('#hns_monster_cards .hns_monster_card').forEach(function (node) {
+        var key = node.getAttribute('data-monster-key');
+        if (!seen[key]) {
+          dojo.destroy(node);
+        }
+      });
+
+      if (!hasMonsters && dojo.query('#hns_monster_cards .hns_empty_state').length === 0) {
         dojo.place('<div class="hns_empty_state">' + _('No monster in this room.') + '</div>', 'hns_monster_cards');
       }
     },
 
     renderHeroPanels: function () {
       var players = this.gamedatas.players || {};
-      var activePlayerId = this.getActivePlayerId();
+      var activePlayerId = this.getLocalActionPlayerId();
       var activePlayer = players[activePlayerId] || players[this.player_id];
       var partnerPlayer = null;
 
@@ -980,26 +1072,45 @@ define([
       var effects = this.renderHeroEffects(player);
       var powers = compact ? this.renderHeroMiniPowers(player.id) : '';
       var maxActionPoints = this.getMaxActionPoints();
-      var actionPoints = (player.action_points || 0) + '/' + maxActionPoints;
+      var actionPoints = this.renderActionPoints(player.action_points || 0, maxActionPoints);
+      var hasFreeMove = parseInt(player.free_move_available || 0, 10) === 1;
 
       dojo.place(this.format_block('jstpl_hns_hero_card', {
         color: player.color || 'ffffff',
         name: player.name || _('Hero'),
         portrait: this.getHeroPortraitImage(player.id),
         health_label: _('HP'),
-        health: player.health || 0,
+        health_icons: this.renderHealthIcons(player.health || 0, player.max_health || player.health || 0),
         ap_label: _('AP'),
         action_points: actionPoints,
+        free_move_label: hasFreeMove ? _('Free move') : _('No free move'),
+        free_move_class: hasFreeMove ? 'hns_available' : 'hns_spent',
         effects: effects,
         powers: powers
       }), nodeId);
     },
 
+    renderHealthIcons: function (health, maxHealth) {
+      health = Math.max(0, parseInt(health || 0, 10));
+      maxHealth = Math.max(health, parseInt(maxHealth || health || 0, 10));
+      var html = '';
+      for (var i = 1; i <= maxHealth; i++) {
+        html += '<span class="hns_heart ' + (i <= health ? 'hns_heart_full' : 'hns_heart_lost') + '">&hearts;</span>';
+      }
+      return html;
+    },
+
+    renderActionPoints: function (actionPoints, maxActionPoints) {
+      actionPoints = Math.max(0, parseInt(actionPoints || 0, 10));
+      maxActionPoints = Math.max(actionPoints, parseInt(maxActionPoints || 0, 10));
+      var html = '<span class="hns_ap_value">' + actionPoints + '</span><span class="hns_ap_max">/' + maxActionPoints + ' AP</span>';
+      return html;
+    },
+
     renderPowerCards: function () {
-      dojo.empty('hns_cards');
       this.updatePowerCardZoom();
 
-      var activePlayerId = this.getActivePlayerId() || this.player_id;
+      var activePlayerId = this.getLocalActionPlayerId();
       var powers = this.getPowersForPlayer(activePlayerId);
       if (powers.length === 0) {
         powers = [
@@ -1010,6 +1121,8 @@ define([
       }
 
       powers = powers.slice(0, MAX_POWER_CARDS);
+      var seen = {};
+      dojo.query('#hns_cards .hns_empty_state').forEach(dojo.destroy);
       for (var i = 0; i < powers.length; i++) {
         var power = powers[i];
         var info = this.getPowerInfo(power.power_key);
@@ -1035,21 +1148,57 @@ define([
           badges += '<button type="button" id="hns_upgrade_power_' + power.id + '" class="hns_upgrade_power" data-slot="' + power.slot + '">' + _('Upgrade') + '</button>';
         }
 
-        dojo.place(this.format_block('jstpl_hns_power_card', {
-          key: power.id || power.slot || power.power_key,
-          power_key: power.power_key,
-          slot: power.slot || '',
-          name: info.name,
-          image: AssetManager.getPowerCardImage(power.power_key),
-          classes: classes,
-          cooldown_overlay: isPlayableCooldown ? cooldown : '',
-          badges: badges
-        }), 'hns_cards');
-        this.connect($('hns_power_card_' + (power.id || power.slot || power.power_key)), 'onclick', 'onPowerCardClick');
+        var key = power.id || power.slot || power.power_key;
+        var node = $('hns_power_card_' + key);
+        var cardClasses = classes;
+        if (String(this.selectedPowerKey || '') === String(power.power_key) && String(this.selectedPowerSlot || '') === String(power.slot || '')) {
+          cardClasses += 'hns_selected ';
+        }
+        var fullClasses = 'hns_power_card ' + cardClasses;
+        seen[String(key)] = true;
+
+        if (!node) {
+          dojo.place(this.format_block('jstpl_hns_power_card', {
+            key: key,
+            power_key: power.power_key,
+            slot: power.slot || '',
+            name: info.name,
+            image: AssetManager.getPowerCardImage(power.power_key),
+            classes: cardClasses,
+            cooldown_overlay: isPlayableCooldown ? cooldown : '',
+            badges: badges
+          }), 'hns_cards');
+          node = $('hns_power_card_' + key);
+          this.connect(node, 'onclick', 'onPowerCardClick');
+        } else {
+          node.className = fullClasses;
+          node.setAttribute('data-power-key', power.power_key);
+          node.setAttribute('data-slot', power.slot || '');
+          node.setAttribute('aria-label', info.name);
+          node.setAttribute('title', info.name);
+          var img = dojo.query('img', node);
+          if (img.length) {
+            img[0].src = AssetManager.getPowerCardImage(power.power_key);
+            img[0].alt = info.name;
+          }
+          var cooldownOverlay = dojo.query('.hns_power_cooldown_overlay', node);
+          if (cooldownOverlay.length) { cooldownOverlay[0].innerHTML = isPlayableCooldown ? cooldown : ''; }
+          var badgeNode = dojo.query('.hns_power_card_badges', node);
+          if (badgeNode.length) { badgeNode[0].innerHTML = badges; }
+        }
+
         if (info.upgrades_to && $('hns_upgrade_power_' + power.id)) {
           this.connect($('hns_upgrade_power_' + power.id), 'onclick', 'onUpgradePowerClick');
         }
+        dojo.place(node, 'hns_cards');
       }
+
+      dojo.query('#hns_cards .hns_power_card').forEach(function (node) {
+        var key = String((node.id || '').replace('hns_power_card_', ''));
+        if (!seen[key]) {
+          dojo.destroy(node);
+        }
+      });
     },
 
     renderRewardOffer: function () {
@@ -1129,10 +1278,10 @@ define([
     renderMonsterEffectIcons: function (effects) {
       var html = '';
       if (effects.shield) {
-        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/shield.webp') + '" alt="Shield" />';
+        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/shielded.webp') + '" alt="Shield" />';
       }
-      if (effects.thorns) {
-        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/thorns.webp') + '" alt="Thorns" />';
+      if (effects.spiky) {
+        html += '<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/spiky.webp') + '" alt="Spiky" />';
       }
       return html;
     },
@@ -1140,10 +1289,13 @@ define([
     renderEntityEffects: function (entity) {
       var effects = '';
       if (this.hasActiveShield(entity)) {
-        effects += '<img class="hns_entity_shield_icon" src="' + AssetManager.getUrl('tiles/markers/shield.webp') + '" alt="Shield" title="Shield" />';
+        effects += '<img class="hns_entity_shield_icon" src="' + AssetManager.getUrl('tiles/markers/shielded.webp') + '" alt="Shield" title="Shield" />';
       }
-      if (this.hasThorns(entity)) {
-        effects += '<img class="hns_entity_thorns_icon" src="' + AssetManager.getUrl('tiles/markers/thorns.webp') + '" alt="Thorns" title="Thorns" />';
+      if (this.hasSpiky(entity)) {
+        effects += '<img class="hns_entity_spiky_icon" src="' + AssetManager.getUrl('tiles/markers/spiky.webp') + '" alt="Spiky" title="Spiky" />';
+      }
+      if (this.hasReinforceEffect(entity)) {
+        effects += '<img class="hns_entity_reinforce_icon" src="' + AssetManager.getUrl('tiles/markers/free-action.webp') + '" alt="Renforcement" title="Renforcement" />';
       }
       return effects;
     },
@@ -1154,6 +1306,9 @@ define([
       var status = hero ? String(hero.status || '') : '';
       if (hero && GameRules.isHeroHeldBySlime(hero, this.gamedatas.tiles || {}, this.gamedatas.entities || {})) {
         effects.push('<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/slimed.webp') + '" alt="Slimed" title="Slimed" />');
+      }
+      if (hero && this.hasReinforceEffect(hero)) {
+        effects.push('<img class="hns_effect_icon" src="' + AssetManager.getUrl('tiles/markers/free-action.webp') + '" alt="Renforcement" title="Renforcement" />');
       }
       return effects.length ? effects.join('') : '<span class="hns_empty_state">' + _('No effect') + '</span>';
     },
@@ -1221,7 +1376,7 @@ define([
       if (this.selectedPowerKey) {
         var selectedPower = this.getPowerInfo(this.selectedPowerKey);
         if (selectedPower.effect === 'dash_attack') {
-          if (!GameRules.isTileValidPowerTarget(tiles[this.getHeroEntityForPlayer(this.getActivePlayerId()).tile_id], tiles[tileId], selectedPower, tiles, entities)) {
+          if (!GameRules.isTileValidPowerTarget(tiles[this.getHeroEntityForPlayer(this.getLocalActionPlayerId()).tile_id], tiles[tileId], selectedPower, tiles, entities)) {
             return;
           }
           this.selectedPowerTileId = tileId;
@@ -1246,7 +1401,7 @@ define([
             payload.target_entity_id = targetEntityId;
           }
         }
-        if (power.effect === 'heal') {
+        if (power.effect === 'heal' || power.effect === 'reinforce') {
           var heroEntityId = GameRules.entityOnTile(tileId, entities, ['hero']);
           if (heroEntityId !== null) {
             payload.target_entity_id = heroEntityId;
@@ -1257,7 +1412,7 @@ define([
       }
 
       var tile = tiles[tileId];
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       if (this.checkAction('actMove') && tile && GameRules.isWalkableTile(tile) && !GameRules.isTileOccupied(tile.id, entities) && !GameRules.isHeroHeldBySlime(hero, tiles, entities)) {
         this.bgaPerformAction('actMove', { tile_id: tileId });
       }
@@ -1344,7 +1499,7 @@ define([
       }
 
       var info = this.getPowerInfo(powerKey);
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       if (GameRules.isMovementBlockedBySlime(info, hero, this.gamedatas.tiles || {}, this.gamedatas.entities || {})) {
         return;
       }
@@ -1620,7 +1775,7 @@ define([
       }
 
       var power = this.getPowerInfo(this.selectedPowerKey);
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       var from = hero && tiles[hero.tile_id];
       var ids = [];
       if (!from || !power) {
@@ -1646,18 +1801,16 @@ define([
       if (stateName === 'upgradeReward') {
         this.syncRewardForCurrentPlayer(stateArgs);
       }
-      this.renderHeroPanels();
-      this.renderPowerCards();
       this.updateRewardFocusState(stateName === 'upgradeReward');
       if (stateName === 'playerTurn') {
-        this.highlightFreeMoveTiles(stateArgs);
+        this.highlightMoveTiles(stateArgs);
       } else {
-        this.clearFreeMoveHighlights();
+        this.clearMoveHighlights();
       }
     },
 
     onLeavingState: function () {
-      this.clearFreeMoveHighlights();
+      this.clearMoveHighlights();
       this.clearMonsterAttackHighlights();
       this.updateRewardFocusState(false);
     },
@@ -1669,13 +1822,13 @@ define([
       }
       if (this.isCurrentPlayerActive() && stateName === 'playerTurn') {
         args = args || (this.gamedatas.gamestate && this.gamedatas.gamestate.args) || {};
-        if (parseInt(args.free_move_available || 0, 10) === 1 || args.free_move_available === true) {
+        if (this.isLocalFreeMoveAvailable(args)) {
           this.addActionButton('hns_skip_free_move_button', _('Skip free move'), 'onSkipFreeMove');
         }
         if (parseInt(args.free_action_available || 0, 10) === 1 || args.free_action_available === true) {
           this.addActionButton('hns_skip_free_action_button', _('Skip free action'), 'onSkipFreeMove');
         }
-        if (parseInt(args.main_action_available || 0, 10) === 1 || args.main_action_available === true) {
+        if (this.isLocalMainActionAvailable(args)) {
           this.addActionButton('hns_skip_main_action_button', _('Skip action'), 'onSkipMainAction');
         }
         this.addActionButton('hns_end_turn_button', _('Ready'), 'onEndTurn');
@@ -1699,7 +1852,7 @@ define([
       var eventTypes = [
         'afterCardPlayed', 'afterDash', 'afterKill',
         'afterPushOrPull', 'entityDamaged', 'entityHealed', 'entityStatusChanged',
-        'thornsDamage', 'shieldBroken', 'monsterAttack', 'monsterSlime',
+        'spikyDamage', 'shieldBroken', 'monsterAttack', 'monsterSlime',
         'monsterCharge', 'monsterFrontArc', 'monsterMove', 'monsterSummon',
         'monsterExplode', 'trapDamage', 'bossPhaseDefeated', 'bossPhaseStarted',
         'bossSpawnMinion', 'bossGrantShield', 'bossTurnSkipped',
@@ -1734,6 +1887,7 @@ define([
       this.pushEvent(_('Hero moves.'), 'effect');
       this.markPanelDirty('heroes');
       this.markPanelDirty('powers');
+      this.scheduleMoveHighlight();
     },
 
     notif_engineEvent: function (notif) {
@@ -1776,7 +1930,7 @@ define([
       this.updatePlayerActionState(args);
       this.markPanelDirty('heroes');
       this.markPanelDirty('powers');
-      this.scheduleFreeMoveHighlight();
+      this.scheduleMoveHighlight();
     },
 
     notif_powerCooldownsUpdated: function (notif) {
@@ -1795,13 +1949,12 @@ define([
         this.gamedatas.players = args.players;
       }
       if (args.entities) {
-        this.gamedatas.entities = args.entities;
-        this.renderBoard(this.gamedatas.tiles || {}, this.gamedatas.entities);
+        this.syncBoardEntities(args.entities);
       }
       this.gamedatas.free_action_events = args.free_action_events || [];
       this.markPanelDirty('heroes');
       this.markPanelDirty('powers');
-      this.scheduleFreeMoveHighlight();
+      this.scheduleMoveHighlight();
     },
 
     // ----- Animation -----
@@ -1846,7 +1999,7 @@ define([
       }
       this.updateEntityStackOrder(tileId);
 
-      this.clearFreeMoveHighlights();
+      this.clearMoveHighlights();
     },
 
     entityNodePosition: function (entityNode) {
@@ -1952,16 +2105,18 @@ define([
 
     // ----- Highlighting -----
 
-    highlightFreeMoveTiles: function (args) {
-      this.clearFreeMoveHighlights();
-      args = args || (this.gamedatas && this.gamedatas.gamestate && this.gamedatas.gamestate.args) || {};
-      if (!this.canActivePlayerMove(args)) {
+    highlightMoveTiles: function (args) {
+      this.clearMoveHighlights();
+      args = args || {};
+      var hasFreeMove = this.isLocalFreeMoveAvailable(args);
+      var hasPaidMove = this.isLocalMainActionAvailable(args);
+      if (!hasFreeMove && !hasPaidMove) {
         return;
       }
 
       var tiles = this.gamedatas.tiles || {};
       var entities = this.gamedatas.entities || {};
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       if (GameRules.isHeroHeldBySlime(hero, tiles, entities)) {
         return;
       }
@@ -1972,43 +2127,52 @@ define([
 
       for (var tileId in tiles) {
         if (GameRules.isFreeMoveTile(from, tiles[tileId], entities)) {
-          dojo.addClass('hns_tile_' + tileId, 'hns_free_move_tile');
+          dojo.addClass('hns_tile_' + tileId, hasFreeMove ? 'hns_free_move_tile' : 'hns_paid_move_tile');
           dojo.attr('hns_tile_' + tileId, 'tabindex', '0');
         }
       }
     },
 
-    scheduleFreeMoveHighlight: function () {
-      if (this.pendingFreeMoveHighlight) {
+    scheduleMoveHighlight: function () {
+      if (this.pendingMoveHighlight) {
         return;
       }
-      this.pendingFreeMoveHighlight = true;
+      this.pendingMoveHighlight = true;
       var self = this;
       window.setTimeout(function () {
-        self.pendingFreeMoveHighlight = false;
-        self.highlightFreeMoveTiles();
+        self.pendingMoveHighlight = false;
+        self.highlightMoveTiles();
       }, 0);
     },
 
-    canActivePlayerMove: function (args) {
-      var player = this.gamedatas.players && this.gamedatas.players[this.getActivePlayerId()];
-      return (parseInt(args.free_move_available || 0, 10) === 1)
-        || args.free_move_available === true
-        || (player && parseInt(player.free_move_available || 0, 10) === 1)
-        || (player && parseInt(player.action_points || 0, 10) > 0);
+    highlightFreeMoveTiles: function (args) {
+      this.highlightMoveTiles(args);
     },
 
-    clearFreeMoveHighlights: function () {
-      dojo.query('.hns_free_move_tile').forEach(function (node) {
+    scheduleFreeMoveHighlight: function () {
+      this.scheduleMoveHighlight();
+    },
+
+    canActivePlayerMove: function (args) {
+      return this.isLocalFreeMoveAvailable(args);
+    },
+
+    clearMoveHighlights: function () {
+      dojo.query('.hns_free_move_tile, .hns_paid_move_tile').forEach(function (node) {
         dojo.attr(node, 'tabindex', '-1');
       });
       dojo.query('.hns_free_move_tile').removeClass('hns_free_move_tile');
+      dojo.query('.hns_paid_move_tile').removeClass('hns_paid_move_tile');
+    },
+
+    clearFreeMoveHighlights: function () {
+      this.clearMoveHighlights();
     },
 
     highlightPowerTargets: function () {
       this.clearPowerHighlights();
       var power = this.getPowerInfo(this.selectedPowerKey);
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       var tiles = this.gamedatas.tiles || {};
       var entities = this.gamedatas.entities || {};
       var from = hero && tiles[hero.tile_id];
@@ -2069,7 +2233,7 @@ define([
         return;
       }
 
-      var hero = this.getHeroEntityForPlayer(this.getActivePlayerId());
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
       var tiles = this.gamedatas.tiles || {};
       var entities = this.gamedatas.entities || {};
       var from = hero && tiles[hero.tile_id];
@@ -2148,7 +2312,7 @@ define([
       }
       if (event.type === 'afterKill') {
         this.markEntityDead(event.target_entity_id);
-        this.scheduleFreeMoveHighlight();
+        this.scheduleMoveHighlight();
       }
       if (event.type === 'monsterSummon') {
         this.addSummonedEntity(event);
@@ -2167,6 +2331,10 @@ define([
       }
       if (event.type === 'bossGrantShield') {
         this.applyBossGrantShield(event);
+      }
+      if (event.type === 'reinforceNextCard') {
+        this.gamedatas.free_action_events = [event];
+        this.updateEntityEffects(event.target_entity_id);
       }
       if (['monsterAttack', 'monsterSlime', 'monsterCharge', 'monsterFrontArc', 'monsterSummon'].indexOf(event.type) !== -1) {
         this.animateMonsterAttack(event);
@@ -2280,6 +2448,7 @@ define([
 
       if (typeof args.free_action_events !== 'undefined') {
         this.gamedatas.free_action_events = args.free_action_events || [];
+        this.updateAllEntityEffects();
       }
 
       if (args.player_power_id && this.gamedatas.player_powers && this.gamedatas.player_powers[args.player_power_id]) {
@@ -2336,10 +2505,10 @@ define([
       }
 
       this.selectedEntityId = null;
-      this.clearFreeMoveHighlights();
+      this.clearMoveHighlights();
       this.renderBoard(this.gamedatas.tiles, this.gamedatas.entities);
       this.renderPowerCards();
-      this.scheduleFreeMoveHighlight();
+      this.scheduleMoveHighlight();
     },
 
     updateEntityHealthFromEvent: function (event) {
@@ -2415,7 +2584,14 @@ define([
         effects[0].innerHTML = this.renderEntityEffects(entity);
       }
       dojo.toggleClass(node, 'hns_entity_shielded', this.hasActiveShield(entity));
-      dojo.toggleClass(node, 'hns_entity_thorns', this.hasThorns(entity));
+      dojo.toggleClass(node, 'hns_entity_spiky', this.hasSpiky(entity));
+    },
+
+    updateAllEntityEffects: function () {
+      var entities = this.gamedatas.entities || {};
+      for (var entityId in entities) {
+        this.updateEntityEffects(entityId);
+      }
     },
 
     markEntityDead: function (entityId) {
@@ -2573,14 +2749,14 @@ define([
       if (this.hasActiveShield(entity)) {
         effects.shield = true;
       }
-      if (status.indexOf('thorn') !== -1) {
-        effects.thorns = true;
+      if (status.indexOf('spiky') !== -1) {
+        effects.spiky = true;
       }
 
       var levelAbilities = this.gamedatas.level_monster_abilities || [];
       for (var i = 0; i < levelAbilities.length; i++) {
-        if (levelAbilities[i] === 'thorns') {
-          effects.thorns = true;
+        if (levelAbilities[i] === 'spiky') {
+          effects.spiky = true;
         }
       }
     },
@@ -2599,15 +2775,15 @@ define([
       return isNaN(parsed) ? 0 : parsed;
     },
 
-    hasThorns: function (entity) {
+    hasSpiky: function (entity) {
       if (!entity || MONSTER_TYPES.indexOf(entity.type) === -1) {
         return false;
       }
       var status = String(entity.status || '');
-      if (status.indexOf('thorn') !== -1) {
+      if (status.indexOf('spiky') !== -1) {
         return true;
       }
-      return (this.gamedatas.level_monster_abilities || []).indexOf('thorns') !== -1;
+      return (this.gamedatas.level_monster_abilities || []).indexOf('spiky') !== -1;
     },
 
     getHeroEntityForPlayer: function (playerId) {
@@ -2656,6 +2832,9 @@ define([
       var info = this.getPowerInfo(powerKey);
       var events = this.gamedatas.free_action_events || [];
       var power = this.getPowerForCurrentPlayer(powerKey, null);
+      if (this.hasReinforceFreeEventForCurrentPlayer() && info.effect !== 'reinforce' && power && parseInt(power.cooldown || 0, 10) === 0 && parseInt(power.plays_remaining || 0, 10) <= 0) {
+        return true;
+      }
       if (!info.free_triggers || info.free_triggers.length === 0) {
         return false;
       }
@@ -2673,8 +2852,61 @@ define([
       return false;
     },
 
+    hasReinforceEffect: function (entity) {
+      if (!entity || entity.type !== 'hero') {
+        return false;
+      }
+      var events = this.gamedatas.free_action_events || [];
+      for (var i = 0; i < events.length; i++) {
+        var event = events[i];
+        if (event && event.type === 'reinforceNextCard') {
+          return String(event.target_entity_id) === String(entity.id);
+        }
+      }
+      return events.indexOf('reinforceNextCard') !== -1;
+    },
+
+    hasReinforceFreeEventForCurrentPlayer: function () {
+      var hero = this.getHeroEntityForPlayer(this.getLocalActionPlayerId());
+      if (!hero) {
+        return false;
+      }
+      return this.hasReinforceEffect(hero);
+    },
+
     getMaxActionPoints: function () {
       return this.getPlayerCount() === 1 ? SOLO_ACTION_POINTS : MULTI_ACTION_POINTS;
+    },
+
+    getLocalActionPlayerId: function () {
+      var players = this.gamedatas.players || {};
+      if (players[this.player_id]) {
+        return this.player_id;
+      }
+      return this.getActivePlayerId() || this.player_id;
+    },
+
+    getLocalActionPlayer: function () {
+      var players = this.gamedatas.players || {};
+      return players[this.getLocalActionPlayerId()] || null;
+    },
+
+    isLocalFreeMoveAvailable: function (args) {
+      var player = this.getLocalActionPlayer();
+      if (player) {
+        return parseInt(player.free_move_available || 0, 10) === 1;
+      }
+      args = args || {};
+      return parseInt(args.free_move_available || 0, 10) === 1 || args.free_move_available === true;
+    },
+
+    isLocalMainActionAvailable: function (args) {
+      var player = this.getLocalActionPlayer();
+      if (player) {
+        return parseInt(player.main_action_available || 0, 10) === 1 || parseInt(player.action_points || 0, 10) > 0;
+      }
+      args = args || {};
+      return parseInt(args.main_action_available || 0, 10) === 1 || args.main_action_available === true;
     },
 
     getPlayerCount: function () {

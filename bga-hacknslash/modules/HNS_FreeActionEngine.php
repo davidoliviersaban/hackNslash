@@ -8,6 +8,7 @@ final class HNS_FreeActionEngine
     public const EVENT_AFTER_KILL = 'afterKill';
     public const EVENT_AFTER_CARD_PLAYED = 'afterCardPlayed';
     public const EVENT_AFTER_DASH_ATTACK = 'afterDashAttack';
+    public const EVENT_REINFORCE_NEXT_CARD = 'reinforceNextCard';
     public const EVENT_ENTITY_DAMAGED = 'entityDamaged';
 
     /** @var array<int, array<string, mixed>> */
@@ -26,6 +27,26 @@ final class HNS_FreeActionEngine
         $this->usedActionKeys = array_values($usedActionKeys);
     }
 
+    /** @param array<string, mixed> $power */
+    public static function playsRemainingAfterUse(array $power, int $currentPlaysRemaining, bool $reinforced = false): int
+    {
+        if ($currentPlaysRemaining > 0) {
+            return max(0, $currentPlaysRemaining - 1);
+        }
+
+        $totalPlays = max(1, (int) ($power['plays'] ?? 1));
+        if ($reinforced) {
+            $totalPlays *= 2;
+        }
+
+        return $totalPlays > 1 ? $totalPlays - 1 : 0;
+    }
+
+    public static function cooldownAfterUse(int $baseCooldown, int $playsRemainingAfterUse): int
+    {
+        return $playsRemainingAfterUse > 0 ? 0 : $baseCooldown;
+    }
+
     /**
      * @param array<int, string> $triggerEvents
      *
@@ -37,6 +58,10 @@ final class HNS_FreeActionEngine
      */
     public function canUseFreeAction(string $actionKey, array $triggerEvents, int $cooldown, int $playsRemaining = 0): bool
     {
+        if ($playsRemaining > 0) {
+            return true;
+        }
+
         if ($cooldown > 0 && $playsRemaining <= 0) {
             return false;
         }

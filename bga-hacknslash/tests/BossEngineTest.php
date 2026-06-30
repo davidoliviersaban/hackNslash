@@ -62,7 +62,7 @@ final class BossEngineTest extends TestCase
 
         $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
 
-        $this->assertContains('shield', $state['level_monster_abilities']);
+        $this->assertContains('shielded', $state['level_monster_abilities']);
         $this->assertSame(1, $state['entities'][30]['has_shield']);
         $this->assertSame(1, $state['entities'][20]['has_shield']);
         $this->assertSame(0, $state['entities'][20]['shield_broken']);
@@ -135,6 +135,26 @@ final class BossEngineTest extends TestCase
         $this->assertSame(3, $events[0]['push_tile_id']);
         $this->assertSame(['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 5], $events[1]);
         $this->assertSame(['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 7], $events[2]);
+    }
+
+    public function testStrikerMovesDuringChargeWhenNoHeroCanBeCharged(): void
+    {
+        include dirname(__DIR__) . '/modules/material/bosses.inc.php';
+        include dirname(__DIR__) . '/modules/material/monsters.inc.php';
+
+        $events = [];
+        $state = $this->bossState(2, $monsters, 'striker');
+        $state['entities'][10]['tile_id'] = 6;
+
+        $state = HNS_BossEngine::activateBossTurn(30, $state, $bosses, $events);
+
+        $this->assertSame(3, $state['entities'][30]['tile_id']);
+        $this->assertSame(8, $state['entities'][10]['health']);
+        $this->assertSame([
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 2],
+            ['type' => 'monsterMove', 'source_entity_id' => 30, 'target_tile_id' => 3],
+            ['type' => 'monsterAttack', 'source_entity_id' => 30, 'target_entity_id' => 10, 'damage' => 2, 'target_health' => 8],
+        ], $events);
     }
 
     public function testStrikerPhaseThreeGrantsShieldThenChargesAndAreaAttacks(): void

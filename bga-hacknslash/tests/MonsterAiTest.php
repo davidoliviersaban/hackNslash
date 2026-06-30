@@ -104,7 +104,7 @@ final class MonsterAiTest extends TestCase
         ], $result['events']);
     }
 
-    public function testSlimeSlimesOrthogonallyAdjacentHeroWithoutDamage(): void
+    public function testSlimeSlimeOrthogonallyAdjacentHeroWithoutDamage(): void
     {
         $state = $this->state;
         $state['entities'][20]['tile_id'] = 2;

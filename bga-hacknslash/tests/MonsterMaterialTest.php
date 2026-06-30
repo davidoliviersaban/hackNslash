@@ -24,21 +24,21 @@ final class MonsterMaterialTest extends TestCase
         $this->assertFalse($goblins['can_attack_and_move']);
     }
 
-    public function testSlimesArriveAloneWithTwoHealthDiagonalMoveAndStickAttack(): void
+    public function testSlimeArriveAloneWithTwoHealthDiagonalMoveAndStickAttack(): void
     {
         include dirname(__DIR__) . '/modules/material/monsters.inc.php';
 
-        $slimes = $monsters[2];
+        $slime = $monsters[2];
 
-        $this->assertSame('Slimes', $slimes['name']);
-        $this->assertSame(2, $slimes['health']);
-        $this->assertSame(1, $slimes['spawn_count']);
-        $this->assertSame(2, $slimes['move']);
-        $this->assertSame('chebyshev', $slimes['move_metric']);
-        $this->assertSame(1, $slimes['range']);
-        $this->assertSame('orthogonal', $slimes['range_metric']);
-        $this->assertSame(0, $slimes['damage']);
-        $this->assertSame('slime', $slimes['effect']);
+        $this->assertSame('Slime', $slime['name']);
+        $this->assertSame(2, $slime['health']);
+        $this->assertSame(1, $slime['spawn_count']);
+        $this->assertSame(2, $slime['move']);
+        $this->assertSame('chebyshev', $slime['move_metric']);
+        $this->assertSame(1, $slime['range']);
+        $this->assertSame('orthogonal', $slime['range_metric']);
+        $this->assertSame(0, $slime['damage']);
+        $this->assertSame('slime', $slime['effect']);
     }
 
     public function testEvilEyeDoesNotMoveAndShootsAtRangeThreeWithDiagonals(): void
