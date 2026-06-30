@@ -1,5 +1,10 @@
 Hack N Slash
 
+## Rules / Regles
+
+- [English Rules](rules-en.md)
+- [Regles en Francais](rules-fr.md)
+
 ## Pitch
 
 Hack N Slash est un dungeon crawler tactique physique en pixel art.
